@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.poolt.core.Device
 import app.poolt.core.RemoteCommand
 
 private val Bg = Color(0xFF0A0A0C)
@@ -104,9 +105,7 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            DeviceStatusCard(device?.brand ?: "Устройство", device?.model ?: "Не выбрано", device?.isOnline == true) {
-                vm.openPicker()
-            }
+            DeviceStatusCard(device, state.connectionMessage, state.isPairing, onClick = { vm.openPicker() }, onReconnect = { vm.pairSelected() })
 
             Spacer(Modifier.height(18.dp))
 
@@ -171,49 +170,104 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
             containerColor = Panel,
             contentColor = Color.White
         ) {
-            Text(
-                "Добавить устройство",
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "Выберите бренд и модель. Позже сюда добавим автоопределение по Wi-Fi.",
-                modifier = Modifier.padding(horizontal = 20.dp),
-                color = Muted
-            )
-            Spacer(Modifier.height(10.dp))
-            state.presets.forEach { preset ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.choosePreset(preset) }
-                        .padding(horizontal = 20.dp, vertical = 15.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 28.dp)
+            ) {
+                Text(
+                    "Устройства",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    if (state.isScanning) "Идёт поиск в локальной сети…" else state.connectionMessage,
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    color = Muted
+                )
+
+                if (state.devices.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text("Найдено автоматически", Modifier.padding(horizontal = 20.dp), fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    state.devices.forEach { found ->
+                        DeviceRow(found) { vm.selectDevice(found) }
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
+                HorizontalDivider(color = Panel2)
+                Spacer(Modifier.height(18.dp))
+
+                Text("Добавить по IP", Modifier.padding(horizontal = 20.dp), fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Если телевизор не найден, укажите его IP в домашней сети.",
+                    Modifier.padding(horizontal = 20.dp, vertical = 5.dp),
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = state.manualIp,
+                    onValueChange = vm::setManualIp,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    label = { Text("IP, например 192.168.1.50") },
+                    singleLine = true
+                )
+
+                state.presets.forEach { preset ->
+                    Row(
                         Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Panel2),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .clickable { vm.addManual(preset) }
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Tv, null, tint = Color.White)
+                        Box(
+                            Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Panel2),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Tv, null, tint = Color.White)
+                        }
+                        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                            Text(preset.brand, fontWeight = FontWeight.SemiBold)
+                            Text(preset.model, color = Muted, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Icon(Icons.Default.ChevronRight, null, tint = Muted)
                     }
-                    Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                        Text(preset.brand, fontWeight = FontWeight.SemiBold)
-                        Text(preset.model, color = Muted, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Icon(Icons.Default.ChevronRight, null, tint = Muted)
                 }
             }
-            Spacer(Modifier.height(26.dp))
         }
     }
 }
 
 @Composable
-private fun DeviceStatusCard(brand: String, model: String, online: Boolean, onClick: () -> Unit) {
+private fun DeviceRow(device: Device, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Tv, null, tint = Color.White)
+        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+            Text(device.name, fontWeight = FontWeight.SemiBold)
+            Text(device.driverId, color = Muted, style = MaterialTheme.typography.bodySmall)
+        }
+        Icon(Icons.Default.ChevronRight, null, tint = Muted)
+    }
+}
+
+@Composable
+private fun DeviceStatusCard(
+    device: Device?,
+    message: String,
+    pairing: Boolean,
+    onClick: () -> Unit,
+    onReconnect: () -> Unit
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -224,24 +278,31 @@ private fun DeviceStatusCard(brand: String, model: String, online: Boolean, onCl
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .background(Panel2),
+            Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Panel2),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Tv, null, tint = Color.White)
+            if (pairing) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+            else Icon(Icons.Default.Tv, null, tint = Color.White)
         }
         Column(Modifier.padding(start = 14.dp).weight(1f)) {
-            Text(brand, fontWeight = FontWeight.SemiBold)
-            Text(model, color = Muted, style = MaterialTheme.typography.bodySmall)
+            Text(device?.brand ?: "Устройство", fontWeight = FontWeight.SemiBold)
+            Text(
+                device?.let { (it.model ?: it.address ?: "Неизвестно") + " · " + message } ?: message,
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2
+            )
         }
-        Box(
-            Modifier
-                .size(9.dp)
-                .clip(CircleShape)
-                .background(if (online) Color(0xFF30D158) else Color(0xFF5A5A60))
-        )
+        if (device != null && !device.isOnline && !pairing) {
+            IconButton(onClick = onReconnect) {
+                Icon(Icons.Default.Link, "Подключить", tint = Color.White)
+            }
+        } else {
+            Box(
+                Modifier.size(9.dp).clip(CircleShape)
+                    .background(if (device?.isOnline == true) Color(0xFF30D158) else Color(0xFF5A5A60))
+            )
+        }
     }
 }
 
@@ -260,12 +321,7 @@ private fun SquareButton(icon: ImageVector, label: String, onClick: () -> Unit) 
 
 @Composable
 private fun DPad(onCommand: (RemoteCommand) -> Unit) {
-    Box(
-        Modifier
-            .size(248.dp)
-            .clip(CircleShape)
-            .background(Panel)
-    ) {
+    Box(Modifier.size(248.dp).clip(CircleShape).background(Panel)) {
         IconButton({ onCommand(RemoteCommand.UP) }, Modifier.align(Alignment.TopCenter).size(76.dp)) {
             Icon(Icons.Default.KeyboardArrowUp, "Up", Modifier.size(40.dp), tint = Color.White)
         }
@@ -283,9 +339,7 @@ private fun DPad(onCommand: (RemoteCommand) -> Unit) {
             modifier = Modifier.align(Alignment.Center).size(92.dp),
             shape = CircleShape,
             colors = ButtonDefaults.buttonColors(containerColor = Panel2)
-        ) {
-            Text("OK", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        }
+        ) { Text("OK", fontWeight = FontWeight.Bold, fontSize = 18.sp) }
     }
 }
 
@@ -299,20 +353,13 @@ private fun TallRocker(
     onBottom: () -> Unit
 ) {
     Column(
-        modifier
-            .height(174.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(Panel),
+        modifier.height(174.dp).clip(RoundedCornerShape(26.dp)).background(Panel),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        IconButton(onClick = onTop, modifier = Modifier.fillMaxWidth().height(58.dp)) {
-            Icon(top, null, tint = Color.White)
-        }
+        IconButton(onClick = onTop, modifier = Modifier.fillMaxWidth().height(58.dp)) { Icon(top, null, tint = Color.White) }
         Text(center, color = Muted, fontWeight = FontWeight.Bold)
-        IconButton(onClick = onBottom, modifier = Modifier.fillMaxWidth().height(58.dp)) {
-            Icon(bottom, null, tint = Color.White)
-        }
+        IconButton(onClick = onBottom, modifier = Modifier.fillMaxWidth().height(58.dp)) { Icon(bottom, null, tint = Color.White) }
     }
 }
 
@@ -341,15 +388,13 @@ private fun NumberPad(onCommand: (RemoteCommand) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         rows.forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { (label, command) ->
+                row.forEach { pair ->
                     Button(
-                        onClick = { onCommand(command) },
+                        onClick = { onCommand(pair.second) },
                         modifier = Modifier.weight(1f).height(52.dp),
                         shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Panel, contentColor = Color.White)
-                    ) {
-                        Text(label, fontWeight = FontWeight.SemiBold)
-                    }
+                    ) { Text(pair.first, fontWeight = FontWeight.SemiBold) }
                 }
             }
         }
