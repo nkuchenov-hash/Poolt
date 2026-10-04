@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "drivers": [
+    {
+      "id": "poolt.demo",
+      "name": "Poolt Demo TV",
+      "vendor": "Poolt",
+      "version": 1,
+      "minAppVersion": 1,
+      "deviceType": "TV",
+      "transport": "NATIVE",
+      "discovery": { "type": "built_in" },
+      "commands": {}
+    }
+  ]
+}

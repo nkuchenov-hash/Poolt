@@ -1,11 +1,14 @@
 package app.poolt.core
 
 class DriverRegistry(drivers: List<DeviceDriver>) {
-    private val byProtocol = drivers.associateBy { it.protocol }
-    fun driverFor(device: Device): DeviceDriver? = byProtocol[device.protocol]
+    private val byId = drivers.associateBy { it.id }
+
+    fun driverFor(device: Device): DeviceDriver? = byId[device.driverId]
+
+    fun installedDrivers(): List<DeviceDriver> = byId.values.sortedBy { it.id }
 
     suspend fun discoverAll(): List<Device> =
-        byProtocol.values.flatMap { driver ->
+        byId.values.flatMap { driver ->
             runCatching { driver.discover() }.getOrDefault(emptyList())
         }.distinctBy { it.id }
 }

@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "drivers": [
+    {
+      "id": "poolt.demo",
+      "name": "Poolt Demo TV",
+      "vendor": "Poolt",
+      "version": 1,
+      "minAppVersion": 1,
+      "deviceType": "TV",
+      "transport": "NATIVE",
+      "discovery": { "type": "built_in" },
+      "commands": {}
+    },
+    {
+      "id": "samsung.smarttv",
+      "name": "Samsung Smart TV",
+      "vendor": "Samsung",
+      "version": 1,
+      "minAppVersion": 1,
+      "deviceType": "TV",
+      "transport": "WEBSOCKET",
+      "discovery": { "type": "ssdp", "query": "Samsung", "port": 8002 },
+      "commands": {}
+    },
+    {
+      "id": "lg.webos",
+      "name": "LG webOS TV",
+      "vendor": "LG",
+      "version": 1,
+      "minAppVersion": 1,
+      "deviceType": "TV",
+      "transport": "WEBSOCKET",
+      "discovery": { "type": "ssdp", "query": "webOS", "port": 3000 },
+      "commands": {}
+    },
+    {
+      "id": "android.tv",
+      "name": "Android TV / Google TV",
+      "vendor": "Google",
+      "version": 1,
+      "minAppVersion": 1,
+      "deviceType": "TV",
+      "transport": "TCP",
+      "discovery": { "type": "mdns", "query": "_androidtvremote2._tcp", "port": 6466 },
+      "commands": {}
+    },
+    {
+      "id": "roku.ecp",
+      "name": "Roku ECP",
+      "vendor": "Roku",
+      "version": 1,
+      "minAppVersion": 1,
+      "deviceType": "MEDIA_PLAYER",
+      "transport": "HTTP",
+      "discovery": { "type": "ssdp", "query": "roku:ecp", "port": 8060 },
+      "commands": {
+        "HOME": { "method": "POST", "path": "/keypress/Home" },
+        "BACK": { "method": "POST", "path": "/keypress/Back" },
+        "UP": { "method": "POST", "path": "/keypress/Up" },
+        "DOWN": { "method": "POST", "path": "/keypress/Down" },
+        "LEFT": { "method": "POST", "path": "/keypress/Left" },
+        "RIGHT": { "method": "POST", "path": "/keypress/Right" },
+        "OK": { "method": "POST", "path": "/keypress/Select" },
+        "PLAY_PAUSE": { "method": "POST", "path": "/keypress/Play" }
+      }
+    }
+  ]
+}

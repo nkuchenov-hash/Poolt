@@ -1,9 +1,13 @@
 package app.poolt.data
 
-import app.poolt.core.*
+import app.poolt.core.Device
+import app.poolt.core.DeviceDriver
+import app.poolt.core.DeviceType
+import app.poolt.core.RemoteCommand
 
 class DemoDriver : DeviceDriver {
-    override val protocol = Protocol.GENERIC
+    override val id = "poolt.demo"
+    override val version = 1
 
     override suspend fun discover(): List<Device> = listOf(
         Device(
@@ -11,7 +15,7 @@ class DemoDriver : DeviceDriver {
             name = "Living Room TV",
             room = "Living room",
             type = DeviceType.TV,
-            protocol = Protocol.GENERIC,
+            driverId = id,
             address = "192.168.1.42",
             isOnline = true
         )
