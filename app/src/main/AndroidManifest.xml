@@ -9,11 +9,16 @@
 
     <application
         android:allowBackup="true"
+        android:icon="@drawable/poolt_icon"
+        android:roundIcon="@drawable/poolt_icon"
         android:label="Poolt"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.Poolt">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
