@@ -40,6 +40,9 @@ private val Muted = Color(0xFF9A9AA1)
 private val Accent = Color(0xFF3A82F6)
 
 class MainActivity : ComponentActivity() {
+    private var splashFinished = false
+    private var splashTimerStarted = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -57,9 +60,16 @@ class MainActivity : ComponentActivity() {
             )
         )
         setContentView(root)
+    }
 
-        root.postDelayed({
-            if (isFinishing || isDestroyed) return@postDelayed
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus || splashTimerStarted || splashFinished) return
+
+        splashTimerStarted = true
+        window.decorView.postDelayed({
+            if (isFinishing || isDestroyed || splashFinished) return@postDelayed
+            splashFinished = true
             enableEdgeToEdge()
             setContent {
                 MaterialTheme(
@@ -72,7 +82,7 @@ class MainActivity : ComponentActivity() {
                     )
                 ) { PooltApp() }
             }
-        }, 1200L)
+        }, 1600L)
     }
 }
 
