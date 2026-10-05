@@ -55,40 +55,15 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PooltApp(vm: MainViewModel = viewModel()) {
-    val state by vm.state.collectAsStateWithLifecycle()
-
+fun PooltApp() {
     Scaffold(
         containerColor = Bg,
         topBar = {
             TopAppBar(
                 title = {
-                    Column(
-                        Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable { vm.openPicker() }
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Poolt", fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                            Spacer(Modifier.width(6.dp))
-                            Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Muted)
-                        }
-                        Text(
-                            when (state.mode) {
-                                ControlMode.IR -> state.selectedIrProfile?.let { it.brand + " · " + it.model } ?: "Выбрать ИК-профиль"
-                                ControlMode.WIFI -> state.selected?.name ?: "Wi‑Fi устройство"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Muted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { vm.openPicker() }) {
-                        Icon(Icons.Default.Add, "Добавить", tint = Color.White)
+                    Column {
+                        Text("Poolt", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                        Text("Диагностика запуска", color = Muted, style = MaterialTheme.typography.labelMedium)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg)
@@ -99,164 +74,24 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
             Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            ModeSwitcher(state.mode, vm::setMode)
-            Spacer(Modifier.height(12.dp))
-            StatusCard(state, onClick = vm::openPicker, onReconnect = vm::pairSelected)
-
-            Spacer(Modifier.height(18.dp))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                SquareButton(Icons.Default.PowerSettingsNew, "Power") { vm.send(RemoteCommand.POWER) }
-                SquareButton(Icons.Default.Input, "Source") { vm.send(RemoteCommand.SOURCE) }
-                SquareButton(Icons.Default.Settings, "Settings") { vm.send(RemoteCommand.SETTINGS) }
-                SquareButton(Icons.Default.Home, "Home") { vm.send(RemoteCommand.HOME) }
-            }
-
-            Spacer(Modifier.height(22.dp))
-            DPad(vm::send)
-            Spacer(Modifier.height(22.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                TallRocker(
-                    Modifier.weight(1f),
-                    top = Icons.Default.Add,
-                    center = "VOL",
-                    bottom = Icons.Default.Remove,
-                    onTop = { vm.send(RemoteCommand.VOLUME_UP) },
-                    onBottom = { vm.send(RemoteCommand.VOLUME_DOWN) }
-                )
-                Column(
-                    Modifier.weight(1.25f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    WideButton(Icons.Default.VolumeOff, "Mute") { vm.send(RemoteCommand.MUTE) }
-                    WideButton(Icons.Default.Menu, "Menu") { vm.send(RemoteCommand.MENU) }
-                    WideButton(Icons.Default.ArrowBack, "Back") { vm.send(RemoteCommand.BACK) }
-                }
-                TallRocker(
-                    Modifier.weight(1f),
-                    top = Icons.Default.KeyboardArrowUp,
-                    center = "CH",
-                    bottom = Icons.Default.KeyboardArrowDown,
-                    onTop = { vm.send(RemoteCommand.CHANNEL_UP) },
-                    onBottom = { vm.send(RemoteCommand.CHANNEL_DOWN) }
-                )
-            }
-
-            Spacer(Modifier.height(18.dp))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                WideButton(Icons.Default.FastRewind, "Rew", Modifier.weight(1f)) { vm.send(RemoteCommand.REWIND) }
-                WideButton(Icons.Default.PlayArrow, "Play", Modifier.weight(1f)) { vm.send(RemoteCommand.PLAY_PAUSE) }
-                WideButton(Icons.Default.FastForward, "Fwd", Modifier.weight(1f)) { vm.send(RemoteCommand.FAST_FORWARD) }
-            }
-
-            Spacer(Modifier.height(18.dp))
-            NumberPad(vm::send)
-            Spacer(Modifier.height(24.dp))
-        }
-    }
-
-    if (state.showDevicePicker) {
-        ModalBottomSheet(
-            onDismissRequest = vm::closePicker,
-            containerColor = Panel,
-            contentColor = Color.White
-        ) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = 28.dp)
-            ) {
-                Text("ИК-пульт", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    if (state.irAvailable) "ИК-передатчик телефона доступен" else "На этом телефоне Android не видит ИК-передатчик",
-                    Modifier.padding(horizontal = 20.dp),
-                    color = if (state.irAvailable) Color(0xFF30D158) else Color(0xFFFF9F0A)
-                )
-                Spacer(Modifier.height(8.dp))
-
-                state.irProfiles.forEach { profile ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { vm.selectIrProfile(profile) }
-                            .padding(horizontal = 20.dp, vertical = 13.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Panel2),
-                            contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Default.SettingsRemote, null, tint = Color.White) }
-                        Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                            Text(profile.brand, fontWeight = FontWeight.SemiBold)
-                            Text(profile.model, color = Muted, style = MaterialTheme.typography.bodySmall)
-                        }
-                        if (state.selectedIrProfile?.id == profile.id && state.mode == ControlMode.IR) {
-                            Icon(Icons.Default.Check, null, tint = Color(0xFF30D158))
-                        } else {
-                            Icon(Icons.Default.ChevronRight, null, tint = Muted)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = Panel2)
-                Spacer(Modifier.height(12.dp))
-
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Wi‑Fi пульты", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("Дополнительный режим для Smart TV", color = Muted, style = MaterialTheme.typography.bodySmall)
-                    }
-                    IconButton(onClick = vm::scan) {
-                        if (state.isScanning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Default.Refresh, "Поиск")
-                    }
-                }
-
-                if (state.devices.isNotEmpty()) {
-                    state.devices.forEach { found -> DeviceRow(found) { vm.selectDevice(found) } }
-                } else {
-                    Text("Автоматически ничего не найдено", Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = Muted)
-                }
-
-                OutlinedTextField(
-                    value = state.manualIp,
-                    onValueChange = vm::setManualIp,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                    label = { Text("IP Smart TV") },
-                    singleLine = true
-                )
-
-                state.presets.forEach { preset ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { vm.addManual(preset) }
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Wifi, null, tint = Muted)
-                        Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                            Text(preset.brand, fontWeight = FontWeight.SemiBold)
-                            Text(preset.model, color = Muted, style = MaterialTheme.typography.bodySmall)
-                        }
-                        Icon(Icons.Default.ChevronRight, null, tint = Muted)
-                    }
-                }
-            }
+            Icon(
+                Icons.Default.SettingsRemote,
+                contentDescription = null,
+                tint = Color(0xFF9E2027),
+                modifier = Modifier.size(72.dp)
+            )
+            Spacer(Modifier.height(20.dp))
+            Text("Poolt запущен", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Базовый экран без IR, Wi‑Fi и каталога.",
+                color = Muted,
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }
