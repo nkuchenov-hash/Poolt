@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
                     onBackground = Color.White,
                     onSurface = Color.White
                 )
-            ) { PooltApp() }
+            ) { PooltRoot() }
         }
     }
 }

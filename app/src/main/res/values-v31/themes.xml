@@ -5,6 +5,9 @@
         <item name="android:statusBarColor">#000000</item>
         <item name="android:navigationBarColor">#000000</item>
         <item name="android:windowBackground">#000000</item>
+        <item name="android:windowSplashScreenBackground">#000000</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/poolt_icon</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#000000</item>
         <item name="android:colorAccent">#9E2027</item>
     </style>
 </resources>
