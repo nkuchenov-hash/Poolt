@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,9 +16,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.poolt.core.Device
 import app.poolt.core.RemoteCommand
+import kotlinx.coroutines.delay
 
 private val Bg = Color(0xFF0A0A0C)
 private val Panel = Color(0xFF17171B)
@@ -49,6 +57,78 @@ class MainActivity : ComponentActivity() {
                     onSurface = Color.White
                 )
             ) { PooltRoot() }
+        }
+    }
+}
+
+@Composable
+private fun PooltRoot() {
+    var showSplash by remember { mutableStateOf(true) }
+    if (showSplash) {
+        PooltSplash { showSplash = false }
+    } else {
+        PooltApp()
+    }
+}
+
+@Composable
+private fun PooltSplash(onFinished: () -> Unit) {
+    val progress = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 1500, easing = LinearEasing)
+        )
+        delay(120)
+        onFinished()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.poolt_splash),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 34.dp)
+                .width(220.dp)
+                .height(34.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text(
+                text = "ПУЛЬТ",
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(0xFF4B1719),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 4.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progress.value)
+                    .clipToBounds()
+            ) {
+                Text(
+                    text = "ПУЛЬТ",
+                    modifier = Modifier.width(220.dp),
+                    color = Color(0xFF9E2027),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 4.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
         }
     }
 }
