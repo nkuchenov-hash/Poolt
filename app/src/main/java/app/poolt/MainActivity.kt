@@ -57,7 +57,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PooltApp(vm: MainViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
-    val device = state.selected
 
     Scaffold(
         containerColor = Bg,
@@ -76,7 +75,10 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                             Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Muted)
                         }
                         Text(
-                            device?.name ?: "Выбрать устройство",
+                            when (state.mode) {
+                                ControlMode.IR -> state.selectedIrProfile?.let { it.brand + " · " + it.model } ?: "Выбрать ИК-профиль"
+                                ControlMode.WIFI -> state.selected?.name ?: "Wi‑Fi устройство"
+                            },
                             style = MaterialTheme.typography.labelMedium,
                             color = Muted,
                             maxLines = 1,
@@ -85,10 +87,6 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { vm.scan() }) {
-                        if (state.isScanning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Default.Refresh, "Поиск", tint = Color.White)
-                    }
                     IconButton(onClick = { vm.openPicker() }) {
                         Icon(Icons.Default.Add, "Добавить", tint = Color.White)
                     }
@@ -105,7 +103,9 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            DeviceStatusCard(device, state.connectionMessage, state.isPairing, onClick = { vm.openPicker() }, onReconnect = { vm.pairSelected() })
+            ModeSwitcher(state.mode, vm::setMode)
+            Spacer(Modifier.height(12.dp))
+            StatusCard(state, onClick = vm::openPicker, onReconnect = vm::pairSelected)
 
             Spacer(Modifier.height(18.dp))
 
@@ -166,7 +166,7 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
 
     if (state.showDevicePicker) {
         ModalBottomSheet(
-            onDismissRequest = { vm.closePicker() },
+            onDismissRequest = vm::closePicker,
             containerColor = Panel,
             contentColor = Color.White
         ) {
@@ -176,43 +176,67 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 28.dp)
             ) {
+                Text("ИК-пульт", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "Устройства",
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
+                    if (state.irAvailable) "ИК-передатчик телефона доступен" else "На этом телефоне Android не видит ИК-передатчик",
+                    Modifier.padding(horizontal = 20.dp),
+                    color = if (state.irAvailable) Color(0xFF30D158) else Color(0xFFFF9F0A)
                 )
-                Text(
-                    if (state.isScanning) "Идёт поиск в локальной сети…" else state.connectionMessage,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    color = Muted
-                )
+                Spacer(Modifier.height(8.dp))
 
-                if (state.devices.isNotEmpty()) {
-                    Spacer(Modifier.height(14.dp))
-                    Text("Найдено автоматически", Modifier.padding(horizontal = 20.dp), fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(6.dp))
-                    state.devices.forEach { found ->
-                        DeviceRow(found) { vm.selectDevice(found) }
+                state.irProfiles.forEach { profile ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { vm.selectIrProfile(profile) }
+                            .padding(horizontal = 20.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Panel2),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Default.SettingsRemote, null, tint = Color.White) }
+                        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                            Text(profile.brand, fontWeight = FontWeight.SemiBold)
+                            Text(profile.model, color = Muted, style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (state.selectedIrProfile?.id == profile.id && state.mode == ControlMode.IR) {
+                            Icon(Icons.Default.Check, null, tint = Color(0xFF30D158))
+                        } else {
+                            Icon(Icons.Default.ChevronRight, null, tint = Muted)
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(12.dp))
                 HorizontalDivider(color = Panel2)
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(12.dp))
 
-                Text("Добавить по IP", Modifier.padding(horizontal = 20.dp), fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Если телевизор не найден, укажите его IP в домашней сети.",
-                    Modifier.padding(horizontal = 20.dp, vertical = 5.dp),
-                    color = Muted,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Wi‑Fi пульты", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text("Дополнительный режим для Smart TV", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    }
+                    IconButton(onClick = vm::scan) {
+                        if (state.isScanning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        else Icon(Icons.Default.Refresh, "Поиск")
+                    }
+                }
+
+                if (state.devices.isNotEmpty()) {
+                    state.devices.forEach { found -> DeviceRow(found) { vm.selectDevice(found) } }
+                } else {
+                    Text("Автоматически ничего не найдено", Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = Muted)
+                }
+
                 OutlinedTextField(
                     value = state.manualIp,
                     onValueChange = vm::setManualIp,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                    label = { Text("IP, например 192.168.1.50") },
+                    label = { Text("IP Smart TV") },
                     singleLine = true
                 )
 
@@ -221,18 +245,10 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                         Modifier
                             .fillMaxWidth()
                             .clickable { vm.addManual(preset) }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Panel2),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Tv, null, tint = Color.White)
-                        }
+                        Icon(Icons.Default.Wifi, null, tint = Muted)
                         Column(Modifier.padding(start = 14.dp).weight(1f)) {
                             Text(preset.brand, fontWeight = FontWeight.SemiBold)
                             Text(preset.model, color = Muted, style = MaterialTheme.typography.bodySmall)
@@ -241,6 +257,62 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ModeSwitcher(mode: ControlMode, onMode: (ControlMode) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(4.dp)
+    ) {
+        listOf(ControlMode.IR to "ИК", ControlMode.WIFI to "Wi‑Fi").forEach { item ->
+            val selected = mode == item.first
+            Box(
+                Modifier.weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (selected) Panel2 else Color.Transparent)
+                    .clickable { onMode(item.first) }
+                    .padding(vertical = 11.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(item.second, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) Color.White else Muted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusCard(state: MainUiState, onClick: () -> Unit, onReconnect: () -> Unit) {
+    val title = when (state.mode) {
+        ControlMode.IR -> state.selectedIrProfile?.brand ?: "ИК-пульт"
+        ControlMode.WIFI -> state.selected?.brand ?: "Wi‑Fi устройство"
+    }
+    val subtitle = when (state.mode) {
+        ControlMode.IR -> (state.selectedIrProfile?.model ?: "Профиль не выбран") + " · " + state.connectionMessage
+        ControlMode.WIFI -> (state.selected?.model ?: state.selected?.address ?: "Не выбрано") + " · " + state.connectionMessage
+    }
+    val online = when (state.mode) {
+        ControlMode.IR -> state.irAvailable && state.selectedIrProfile != null
+        ControlMode.WIFI -> state.selected?.isOnline == true
+    }
+
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Panel2), contentAlignment = Alignment.Center) {
+            if (state.isPairing && state.mode == ControlMode.WIFI) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+            else Icon(if (state.mode == ControlMode.IR) Icons.Default.SettingsRemote else Icons.Default.Tv, null, tint = Color.White)
+        }
+        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+        }
+        if (state.mode == ControlMode.WIFI && state.selected != null && !online && !state.isPairing) {
+            IconButton(onClick = onReconnect) { Icon(Icons.Default.Link, "Подключить", tint = Color.White) }
+        } else {
+            Box(Modifier.size(9.dp).clip(CircleShape).background(if (online) Color(0xFF30D158) else Color(0xFF5A5A60)))
         }
     }
 }
@@ -257,52 +329,6 @@ private fun DeviceRow(device: Device, onClick: () -> Unit) {
             Text(device.driverId, color = Muted, style = MaterialTheme.typography.bodySmall)
         }
         Icon(Icons.Default.ChevronRight, null, tint = Muted)
-    }
-}
-
-@Composable
-private fun DeviceStatusCard(
-    device: Device?,
-    message: String,
-    pairing: Boolean,
-    onClick: () -> Unit,
-    onReconnect: () -> Unit
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Panel)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Panel2),
-            contentAlignment = Alignment.Center
-        ) {
-            if (pairing) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Default.Tv, null, tint = Color.White)
-        }
-        Column(Modifier.padding(start = 14.dp).weight(1f)) {
-            Text(device?.brand ?: "Устройство", fontWeight = FontWeight.SemiBold)
-            Text(
-                device?.let { (it.model ?: it.address ?: "Неизвестно") + " · " + message } ?: message,
-                color = Muted,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2
-            )
-        }
-        if (device != null && !device.isOnline && !pairing) {
-            IconButton(onClick = onReconnect) {
-                Icon(Icons.Default.Link, "Подключить", tint = Color.White)
-            }
-        } else {
-            Box(
-                Modifier.size(9.dp).clip(CircleShape)
-                    .background(if (device?.isOnline == true) Color(0xFF30D158) else Color(0xFF5A5A60))
-            )
-        }
     }
 }
 
@@ -344,14 +370,7 @@ private fun DPad(onCommand: (RemoteCommand) -> Unit) {
 }
 
 @Composable
-private fun TallRocker(
-    modifier: Modifier,
-    top: ImageVector,
-    center: String,
-    bottom: ImageVector,
-    onTop: () -> Unit,
-    onBottom: () -> Unit
-) {
+private fun TallRocker(modifier: Modifier, top: ImageVector, center: String, bottom: ImageVector, onTop: () -> Unit, onBottom: () -> Unit) {
     Column(
         modifier.height(174.dp).clip(RoundedCornerShape(26.dp)).background(Panel),
         horizontalAlignment = Alignment.CenterHorizontally,
