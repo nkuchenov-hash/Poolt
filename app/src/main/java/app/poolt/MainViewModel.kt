@@ -64,8 +64,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<MainUiState> = _state.asStateFlow()
 
     init {
-        // IR-first startup must not depend on Wi-Fi, multicast or Internet.
-        // Network discovery and remote catalog refresh run only when explicitly requested.
+        refreshIrCatalog()
+        scan()
     }
 
     fun setMode(mode: ControlMode) {
