@@ -2,8 +2,6 @@ package app.poolt
 
 import android.os.Bundle
 import android.graphics.Color as AndroidColor
-import android.graphics.Rect
-import android.animation.ValueAnimator
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -50,7 +48,6 @@ class MainActivity : ComponentActivity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(AndroidColor.BLACK) }
 
-        // Approved artwork, unchanged except for downscaling to keep startup memory safe.
         val splash = ImageView(this).apply {
             setImageResource(R.drawable.poolt_splash)
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -64,40 +61,7 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        // Transparent overlay generated from the *existing* white Poolt letters in
-        // the approved artwork. No extra font/text is drawn.
-        val wordFill = ImageView(this).apply {
-            setImageResource(R.drawable.poolt_word_fill)
-            scaleType = ImageView.ScaleType.CENTER_CROP
-        }
-        root.addView(
-            wordFill,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                Gravity.CENTER
-            )
-        )
-
         setContentView(root)
-
-        root.post {
-            val iw = 864f
-            val ih = 1536f
-            val scale = maxOf(root.width / iw, root.height / ih)
-            val imageLeft = (root.width - iw * scale) / 2f
-            val wordLeft = (imageLeft + 300f * scale).toInt()
-            val wordRight = (imageLeft + 570f * scale).toInt()
-            wordFill.clipBounds = Rect(wordLeft, 0, wordLeft, root.height)
-
-            ValueAnimator.ofInt(wordLeft, wordRight).apply {
-                duration = 1600L
-                addUpdateListener { anim ->
-                    wordFill.clipBounds = Rect(wordLeft, 0, anim.animatedValue as Int, root.height)
-                }
-                start()
-            }
-        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
