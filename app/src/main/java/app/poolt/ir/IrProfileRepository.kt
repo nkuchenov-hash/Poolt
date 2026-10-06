@@ -83,7 +83,7 @@ class IrProfileRepository(private val context: Context) {
                 )
             }
             .distinctBy { it.path }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.brand }.thenBy { it.deviceType })
+            .sortedWith(compareBy<IrCatalogEntry> { it.brand.lowercase() }.thenBy { it.deviceType.lowercase() })
             .toList()
 
     private fun parseIrdbCsv(entry: IrCatalogEntry, csv: String): IrProfile {
