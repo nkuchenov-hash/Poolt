@@ -1,6 +1,10 @@
 package app.poolt.core
 
-enum class DeviceType { TV, MEDIA_PLAYER, AUDIO, PROJECTOR, AIR_CONDITIONER, OTHER }
+enum class DeviceType {
+    TV, SET_TOP_BOX, MEDIA_PLAYER, AUDIO, SOUNDBAR, PROJECTOR,
+    AIR_CONDITIONER, FAN, AIR_PURIFIER, CAMERA, GAME_CONSOLE,
+    LIGHTING, OTHER
+}
 
 data class Device(
     val id: String,

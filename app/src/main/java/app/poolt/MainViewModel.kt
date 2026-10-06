@@ -8,6 +8,7 @@ import app.poolt.drivers.LgWebOsDriver
 import app.poolt.drivers.RokuDriver
 import app.poolt.drivers.SamsungDriver
 import app.poolt.ir.IrProfile
+import app.poolt.ir.IrCatalogEntry
 import app.poolt.ir.IrProfileRepository
 import app.poolt.ir.IrTransmitter
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,9 @@ data class MainUiState(
     val irAvailable: Boolean = false,
     val irProfiles: List<IrProfile> = emptyList(),
     val selectedIrProfile: IrProfile? = null,
+    val irCatalog: List<IrCatalogEntry> = emptyList(),
+    val irQuery: String = "",
+    val isLoadingIrCatalog: Boolean = false,
     val devices: List<Device> = emptyList(),
     val selected: Device? = null,
     val presets: List<DevicePreset> = listOf(
@@ -58,6 +62,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             irAvailable = irTransmitter.hasEmitter,
             irProfiles = initialProfiles,
             selectedIrProfile = initialProfiles.firstOrNull(),
+            irCatalog = runCatching { irRepository.cachedIrdbIndex() }.getOrDefault(emptyList()),
             connectionMessage = if (irTransmitter.hasEmitter) "ИК-порт готов" else "На телефоне не найден ИК-передатчик"
         )
     )
@@ -65,7 +70,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         refreshIrCatalog()
-        scan()
     }
 
     fun setMode(mode: ControlMode) {
@@ -113,7 +117,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun openPicker() { _state.value = _state.value.copy(showDevicePicker = true) }
+    fun openPicker() {
+        _state.value = _state.value.copy(showDevicePicker = true)
+        if (_state.value.irCatalog.isEmpty()) loadWorldwideIrCatalog()
+    }
+
+    fun setIrQuery(value: String) {
+        _state.value = _state.value.copy(irQuery = value)
+    }
+
+    fun loadWorldwideIrCatalog() {
+        if (_state.value.isLoadingIrCatalog) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoadingIrCatalog = true)
+            val result = withContext(Dispatchers.IO) { irRepository.fetchIrdbIndex() }
+            _state.value = _state.value.copy(
+                isLoadingIrCatalog = false,
+                irCatalog = result.getOrElse { _state.value.irCatalog },
+                connectionMessage = if (result.isSuccess)
+                    "Мировой ИК-каталог загружен: " + result.getOrThrow().size + " код-сетов"
+                else "Не удалось обновить мировой каталог: " + (result.exceptionOrNull()?.message ?: "ошибка")
+            )
+        }
+    }
+
+    fun selectWorldwideIrEntry(entry: IrCatalogEntry) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(connectionMessage = "Загрузка ИК-кода " + entry.brand + "…")
+            val result = withContext(Dispatchers.IO) { irRepository.fetchIrdbProfile(entry) }
+            if (result.isSuccess) {
+                val profile = result.getOrThrow()
+                val merged = (_state.value.irProfiles.filterNot { it.id == profile.id } + profile)
+                _state.value = _state.value.copy(
+                    mode = ControlMode.IR,
+                    irProfiles = merged,
+                    selectedIrProfile = profile,
+                    showDevicePicker = false,
+                    connectionMessage = "ИК-профиль загружен · " + profile.brand
+                )
+            } else {
+                _state.value = _state.value.copy(
+                    connectionMessage = result.exceptionOrNull()?.message ?: "Этот ИК-профиль пока не поддерживается"
+                )
+            }
+        }
+    }
     fun closePicker() { _state.value = _state.value.copy(showDevicePicker = false) }
     fun setManualIp(value: String) { _state.value = _state.value.copy(manualIp = value.filter { it.isDigit() || it == '.' }) }
 

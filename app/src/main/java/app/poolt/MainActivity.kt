@@ -4,8 +4,6 @@ import android.os.Bundle
 import android.graphics.Color as AndroidColor
 import android.graphics.Rect
 import android.animation.ValueAnimator
-import android.graphics.Typeface
-import android.widget.TextView
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -41,7 +39,7 @@ private val Bg = Color(0xFF0A0A0C)
 private val Panel = Color(0xFF17171B)
 private val Panel2 = Color(0xFF202026)
 private val Muted = Color(0xFF9A9AA1)
-private val Accent = Color(0xFF3A82F6)
+private val Accent = Color(0xFF9E2027)
 
 class MainActivity : ComponentActivity() {
     private var splashFinished = false
@@ -52,7 +50,7 @@ class MainActivity : ComponentActivity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(AndroidColor.BLACK) }
 
-        // Exact approved artwork from drawable. No generated/recreated splash.
+        // Approved artwork, unchanged except for downscaling to keep startup memory safe.
         val splash = ImageView(this).apply {
             setImageResource(R.drawable.poolt_splash)
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -66,16 +64,20 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        // Red copy of the existing "Poolt" word. It is placed directly over the
-        // word already present in the artwork and revealed from left to right.
-        val fillText = TextView(this).apply {
-            text = "Poolt"
-            setTextColor(AndroidColor.rgb(214, 47, 55))
-            gravity = Gravity.CENTER
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-            includeFontPadding = false
+        // Transparent overlay generated from the *existing* white Poolt letters in
+        // the approved artwork. No extra font/text is drawn.
+        val wordFill = ImageView(this).apply {
+            setImageResource(R.drawable.poolt_word_fill)
+            scaleType = ImageView.ScaleType.CENTER_CROP
         }
-        root.addView(fillText)
+        root.addView(
+            wordFill,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER
+            )
+        )
 
         setContentView(root)
 
@@ -84,29 +86,14 @@ class MainActivity : ComponentActivity() {
             val ih = 1536f
             val scale = maxOf(root.width / iw, root.height / ih)
             val imageLeft = (root.width - iw * scale) / 2f
-            val imageTop = (root.height - ih * scale) / 2f
+            val wordLeft = (imageLeft + 300f * scale).toInt()
+            val wordRight = (imageLeft + 570f * scale).toInt()
+            wordFill.clipBounds = Rect(wordLeft, 0, wordLeft, root.height)
 
-            // Coordinates of the existing "Poolt" word in the approved 864x1536 image.
-            val left = imageLeft + 304f * scale
-            val top = imageTop + 1260f * scale
-            val right = imageLeft + 563f * scale
-            val bottom = imageTop + 1350f * scale
-
-            val w = (right - left).toInt().coerceAtLeast(1)
-            val h = (bottom - top).toInt().coerceAtLeast(1)
-            fillText.textSize = 71f * scale / resources.displayMetrics.scaledDensity
-
-            val lp = FrameLayout.LayoutParams(w, h).apply {
-                leftMargin = left.toInt()
-                topMargin = top.toInt()
-            }
-            fillText.layoutParams = lp
-            fillText.clipBounds = Rect(0, 0, 0, h)
-
-            ValueAnimator.ofInt(0, w).apply {
+            ValueAnimator.ofInt(wordLeft, wordRight).apply {
                 duration = 1600L
                 addUpdateListener { anim ->
-                    fillText.clipBounds = Rect(0, 0, anim.animatedValue as Int, h)
+                    wordFill.clipBounds = Rect(wordLeft, 0, anim.animatedValue as Int, root.height)
                 }
                 start()
             }
@@ -260,7 +247,7 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 28.dp)
             ) {
-                Text("ИК-пульт", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("Универсальный ИК-пульт", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(
                     if (state.irAvailable) "ИК-передатчик телефона доступен" else "На этом телефоне Android не видит ИК-передатчик",
                     Modifier.padding(horizontal = 20.dp),
@@ -268,12 +255,54 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                 )
                 Spacer(Modifier.height(8.dp))
 
-                state.irProfiles.forEach { profile ->
+                OutlinedTextField(
+                    value = state.irQuery,
+                    onValueChange = vm::setIrQuery,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                    label = { Text("Бренд, тип или модель") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    singleLine = true
+                )
+
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (state.irCatalog.isEmpty()) "Загрузка мирового каталога…" else
+                            "IRDB: " + state.irCatalog.size + " код-сетов · " +
+                                state.irCatalog.map { it.brand }.distinct().size + " брендов",
+                        color = Muted,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (state.isLoadingIrCatalog) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        IconButton(onClick = vm::loadWorldwideIrCatalog) { Icon(Icons.Default.Refresh, "Обновить каталог") }
+                    }
+                }
+
+                val shownIrEntries = remember(state.irCatalog, state.irQuery) {
+                    val q = state.irQuery.trim()
+                    state.irCatalog
+                        .asSequence()
+                        .filter {
+                            q.isBlank() ||
+                                it.brand.contains(q, true) ||
+                                it.deviceType.contains(q, true) ||
+                                it.codeSet.contains(q, true)
+                        }
+                        .take(if (q.isBlank()) 40 else 100)
+                        .toList()
+                }
+
+                shownIrEntries.forEach { entry ->
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { vm.selectIrProfile(profile) }
-                            .padding(horizontal = 20.dp, vertical = 13.dp),
+                            .clickable { vm.selectWorldwideIrEntry(entry) }
+                            .padding(horizontal = 20.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -281,12 +310,21 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                             contentAlignment = Alignment.Center
                         ) { Icon(Icons.Default.SettingsRemote, null, tint = Color.White) }
                         Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                            Text(profile.brand, fontWeight = FontWeight.SemiBold)
-                            Text(profile.model, color = Muted, style = MaterialTheme.typography.bodySmall)
+                            Text(entry.brand, fontWeight = FontWeight.SemiBold)
+                            Text(entry.deviceType + " · " + entry.codeSet, color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
-                        if (state.selectedIrProfile?.id == profile.id && state.mode == ControlMode.IR) {
-                            Icon(Icons.Default.Check, null, tint = Color(0xFF30D158))
-                        } else {
+                        Icon(Icons.Default.ChevronRight, null, tint = Muted)
+                    }
+                }
+
+                if (state.irCatalog.isEmpty() && !state.isLoadingIrCatalog) {
+                    Text("Встроенные профили", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = Muted)
+                    state.irProfiles.forEach { profile ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { vm.selectIrProfile(profile) }.padding(horizontal = 20.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(profile.brand + " · " + profile.model, Modifier.weight(1f))
                             Icon(Icons.Default.ChevronRight, null, tint = Muted)
                         }
                     }
