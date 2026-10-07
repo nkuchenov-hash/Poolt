@@ -5,8 +5,6 @@ import android.graphics.Color as AndroidColor
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.graphics.BitmapFactory
-import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -50,18 +48,8 @@ class MainActivity : ComponentActivity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(AndroidColor.BLACK) }
 
-        val splashBytes = buildString {
-            for (i in 1..11) {
-                val name = "splash_parts/" + i.toString().padStart(2, '0') + ".txt"
-                append(assets.open(name).bufferedReader().use { it.readText() }.trim())
-            }
-        }.let { Base64.decode(it, Base64.DEFAULT) }
-
-        val splashBitmap = BitmapFactory.decodeByteArray(splashBytes, 0, splashBytes.size)
-            ?: error("Poolt splash decode failed")
-
         val splash = ImageView(this).apply {
-            setImageBitmap(splashBitmap)
+            setImageResource(R.drawable.poolt_splash)
             scaleType = ImageView.ScaleType.CENTER_CROP
         }
         root.addView(
