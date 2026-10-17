@@ -2,6 +2,8 @@
 
 Universal remote control for TVs and other devices.
 
+Current code ownership: `docs/ARCHITECTURE.md`; AI development rules: `AGENTS.md`; dated source/document review: `docs/DOCUMENTATION_PARITY_2026-10-17.md`. These notes do **not** certify protocol compatibility without device testing.
+
 ## Driver architecture
 
 Poolt uses stable string driver IDs instead of a fixed manufacturer enum.
