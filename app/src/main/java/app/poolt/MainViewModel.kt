@@ -11,6 +11,10 @@ import app.poolt.ir.IrProfile
 import app.poolt.ir.IrCatalogEntry
 import app.poolt.ir.IrProfileRepository
 import app.poolt.ir.IrTransmitter
+import app.poolt.network.SsdpDiscovery
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +45,8 @@ data class MainUiState(
         DevicePreset("Roku", "Roku TV / Player", "roku.ecp", DeviceType.MEDIA_PLAYER)
     ),
     val isScanning: Boolean = false,
+    val wifiScanMessage: String = "",
+    val hasScannedWifi: Boolean = false,
     val isPairing: Boolean = false,
     val showDevicePicker: Boolean = false,
     val manualIp: String = "",
@@ -59,6 +65,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     ))
 
     private val initialProfiles = runCatching { irRepository.cached() }.getOrDefault(emptyList())
+    private val selectionPrefs =
+        app.getSharedPreferences("poolt_selection", Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow(
         MainUiState(
@@ -73,9 +81,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         refreshIrCatalog()
+        val last = selectionPrefs.getString("selected_ir", null)
+        if (last != null) {
+            initialProfiles.firstOrNull { it.id == last }?.let {
+                _state.value = _state.value.copy(selectedIrProfile = it)
+            }
+        }
+        val ip = selectionPrefs.getString("wifi_ip", null)
+        val driverId = selectionPrefs.getString("wifi_driver", null)
+        if (ip != null && driverId != null) {
+            val brand = when (driverId) {
+                "lg.webos" -> "LG"
+                "samsung.smarttv" -> "Samsung"
+                "roku.ecp" -> "Roku"
+                else -> "TV"
+            }
+            _state.value = _state.value.copy(
+                mode = if (selectionPrefs.getString("mode", "IR") == "WIFI") ControlMode.WIFI else ControlMode.IR,
+                selected = Device("$driverId@$ip", "$brand Smart TV",
+                    type = DeviceType.TV, driverId = driverId, brand = brand,
+                    model = "Сохранённое устройство", address = ip, isOnline = false)
+            )
+        }
     }
 
     fun setMode(mode: ControlMode) {
+        selectionPrefs.edit().putString("mode", mode.name).apply()
         _state.value = _state.value.copy(
             mode = mode,
             connectionMessage = when (mode) {
@@ -86,6 +117,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectIrProfile(profile: IrProfile) {
+        selectionPrefs.edit().putString("selected_ir", profile.id).putString("mode", "IR").apply()
         _state.value = _state.value.copy(
             mode = ControlMode.IR,
             selectedIrProfile = profile,
@@ -108,16 +140,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun scan() = viewModelScope.launch {
-        _state.value = _state.value.copy(isScanning = true)
-        val devices = registry.discoverAll()
-        _state.value = _state.value.copy(
-            devices = devices,
-            isScanning = false,
-            connectionMessage = if (_state.value.mode == ControlMode.WIFI) {
-                if (devices.isEmpty()) "Wi‑Fi: ничего не найдено. Можно добавить по IP." else "Wi‑Fi: найдено " + devices.size
-            } else _state.value.connectionMessage
-        )
+    fun scan() {
+        if (_state.value.isScanning) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isScanning = true,
+                wifiScanMessage = "Ищем телевизоры в локальной сети…")
+            val cm = getApplication<Application>()
+                .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val network = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+            val onLocalNetwork = network?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true ||
+                network?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true ||
+                network?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            val result = withContext(Dispatchers.IO) {
+                runCatching { SsdpDiscovery.discover(getApplication()) }
+            }
+            val devices = result.getOrDefault(emptyList())
+            val message = when {
+                result.isFailure -> "Ошибка поиска: " +
+                    (result.exceptionOrNull()?.localizedMessage ?: "проверьте соединение")
+                devices.isNotEmpty() -> "Найдено телевизоров: " + devices.size + ". Выберите устройство."
+                !onLocalNetwork -> "Подключите телефон к Wi-Fi сети телевизора и повторите поиск."
+                else -> "Телевизоры не найдены. Включите ТВ, убедитесь, что он и телефон в одной сети, и разрешите управление с телефона на ТВ."
+            }
+            _state.value = _state.value.copy(devices = devices, isScanning = false,
+                hasScannedWifi = true, wifiScanMessage = message, connectionMessage = message)
+        }
     }
 
     fun openPicker() {
@@ -202,8 +249,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun sendIrTestCommand(command: RemoteCommand) {
+        val profile = _state.value.irTrialProfile ?: return
+        val result = irTransmitter.send(profile, command)
+        _state.value = _state.value.copy(
+            irTestMessage = if (result.isSuccess) "Команда отправлена. Проверьте реакцию телевизора."
+                else "Не удалось отправить: " + (result.exceptionOrNull()?.message ?: "нет кода")
+        )
+    }
+
     fun confirmIrTrial() {
         val profile = _state.value.irTrialProfile ?: return
+        selectionPrefs.edit().putString("selected_ir", profile.id).putString("mode", "IR").apply()
         val merged = _state.value.irProfiles.filterNot { it.id == profile.id } + profile
         _state.value = _state.value.copy(
             irProfiles = merged, selectedIrProfile = profile,
@@ -216,6 +273,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setManualIp(value: String) { _state.value = _state.value.copy(manualIp = value.filter { it.isDigit() || it == '.' }) }
 
     fun selectDevice(device: Device) {
+        selectionPrefs.edit().putString("wifi_ip", device.address)
+            .putString("wifi_driver", device.driverId).putString("mode", "WIFI").apply()
         _state.value = _state.value.copy(
             mode = ControlMode.WIFI,
             selected = device,
