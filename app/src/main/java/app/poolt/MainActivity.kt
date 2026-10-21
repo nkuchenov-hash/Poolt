@@ -10,6 +10,7 @@ import android.animation.ValueAnimator
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
+import androidx.core.view.doOnLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -116,12 +117,11 @@ class MainActivity : ComponentActivity() {
 
         splashTimerStarted = true
         // Clip the whole correctly-aligned overlay, not guessed window coordinates.
-        wordFillView?.post {
-            val fill = wordFillView ?: return@post
-            if (isFinishing || isDestroyed || splashFinished) return@post
+        wordFillView?.doOnLayout { fill ->
+            if (isFinishing || isDestroyed || splashFinished) return@doOnLayout
             val width = fill.width
             val height = fill.height
-            if (width <= 0 || height <= 0) return@post
+            if (width <= 0 || height <= 0) return@doOnLayout
             fill.clipBounds = Rect(0, 0, 0, height)
             ValueAnimator.ofInt(0, width).apply {
                 duration = 1450L
