@@ -64,7 +64,7 @@ private fun kindOf(type: DeviceType): String = when (type) {
 
 @Composable
 fun DevicePickerContent(state: MainUiState, vm: MainViewModel) {
-    var wifi by remember { mutableStateOf(false) }
+    var wifi by remember { mutableStateOf(state.mode == ControlMode.WIFI) }
     var type by remember { mutableStateOf<String?>(null) }
     var brand by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
@@ -117,7 +117,7 @@ fun DevicePickerContent(state: MainUiState, vm: MainViewModel) {
             listOf(false to "ИК-пульт", true to "Wi-Fi").forEach { (item, text) ->
                 Box(
                     Modifier.weight(1f)
-                        .background(if (wifi == item) PickerAccent else Color.Transparent, RoundedCornerShape(11.dp))
+                        .background(if (wifi == item) Color(0xFF48484E) else Color.Transparent, RoundedCornerShape(11.dp))
                         .clickable { wifi = item }
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
@@ -295,11 +295,21 @@ private fun PickerRow(title: String, subtitle: String, icon: ImageVector, onClic
 private fun WifiDevicePicker(state: MainUiState, vm: MainViewModel) {
     Text("Smart TV и устройства в одной сети Wi-Fi", color = PickerMuted)
     Spacer(Modifier.height(10.dp))
-    Button(onClick = vm::scan, modifier = Modifier.fillMaxWidth()) {
+    Button(
+        onClick = vm::scan,
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        enabled = !state.isScanning,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF35353B),
+            contentColor = Color.White,
+            disabledContainerColor = Color(0xFF29292D),
+            disabledContentColor = Color.White
+        )
+    ) {
         if (state.isScanning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         else Icon(Icons.Default.Refresh, null)
         Spacer(Modifier.width(8.dp))
-        Text("Найти устройства")
+        Text("Найти устройства", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
     }
     state.devices.forEach { device ->
         PickerRow(device.name, device.driverId, Icons.Default.Wifi) { vm.selectDevice(device) }

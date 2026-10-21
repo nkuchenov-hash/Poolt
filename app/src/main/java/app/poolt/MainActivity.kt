@@ -3,6 +3,9 @@ package app.poolt
 import android.os.Bundle
 import android.graphics.Color as AndroidColor
 import android.graphics.Rect
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Color as AColor
 import android.animation.ValueAnimator
 import android.view.Gravity
 import android.widget.FrameLayout
@@ -11,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -51,8 +55,9 @@ class MainActivity : ComponentActivity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(AndroidColor.BLACK) }
 
+        val artwork = BitmapFactory.decodeResource(resources, R.drawable.poolt_splash)
         val splash = ImageView(this).apply {
-            setImageResource(R.drawable.poolt_splash)
+            setImageBitmap(artwork)
             scaleType = ImageView.ScaleType.CENTER_CROP
         }
         root.addView(
@@ -64,10 +69,10 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        // Transparent pixel-perfect copy of the EXISTING Poolt letters.
-        // No additional text/font is rendered on the artwork.
+        // Recolour only the bright pixels of the original Poolt lettering.
+        // No second font, no added words and no JPEG approximation.
         val wordFill = ImageView(this).apply {
-            setImageResource(R.drawable.poolt_word_fill)
+            setImageBitmap(makeWordFill(artwork))
             scaleType = ImageView.ScaleType.CENTER_CROP
             clipBounds = Rect(0, 0, 0, 0)
         }
@@ -83,27 +88,46 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
     }
 
+    private fun makeWordFill(artwork: Bitmap): Bitmap {
+        val result = Bitmap.createBitmap(artwork.width, artwork.height, Bitmap.Config.ARGB_8888)
+        val x0 = (artwork.width * 300f / 864f).toInt()
+        val y0 = (artwork.height * 1250f / 1536f).toInt()
+        val right = (artwork.width * 580f / 864f).toInt().coerceAtMost(artwork.width)
+        val bottom = (artwork.height * 1350f / 1536f).toInt().coerceAtMost(artwork.height)
+        val w = right - x0
+        val h = bottom - y0
+        if (w <= 0 || h <= 0) return result
+        val original = IntArray(w * h)
+        val coloured = IntArray(w * h)
+        artwork.getPixels(original, 0, w, x0, y0, w, h)
+        for (i in original.indices) {
+            val c = original[i]
+            val brightness = minOf(AColor.red(c), AColor.green(c), AColor.blue(c))
+            val alpha = ((brightness - 30).coerceIn(0, 160) * 255 / 160)
+            coloured[i] = AColor.argb(alpha, 232, 64, 75)
+        }
+        result.setPixels(coloured, 0, w, x0, y0, w, h)
+        return result
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus || splashTimerStarted || splashFinished) return
 
         splashTimerStarted = true
-        val fill = wordFillView
-        if (fill != null) {
-            val iw = 864f
-            val ih = 1536f
-            val vw = window.decorView.width.toFloat()
-            val vh = window.decorView.height.toFloat()
-            val scale = maxOf(vw / iw, vh / ih)
-            val left = ((vw - iw * scale) / 2f + 310f * scale).toInt()
-            val right = ((vw - iw * scale) / 2f + 565f * scale).toInt()
-            val top = ((vh - ih * scale) / 2f + 1250f * scale).toInt()
-            val bottom = ((vh - ih * scale) / 2f + 1350f * scale).toInt()
-            fill.clipBounds = Rect(left, top, left, bottom)
-            ValueAnimator.ofInt(left, right).apply {
-                duration = 1500L
-                addUpdateListener {
-                    fill.clipBounds = Rect(left, top, it.animatedValue as Int, bottom)
+        // Clip the whole correctly-aligned overlay, not guessed window coordinates.
+        wordFillView?.post {
+            val fill = wordFillView ?: return@post
+            if (isFinishing || isDestroyed || splashFinished) return@post
+            val width = fill.width
+            val height = fill.height
+            if (width <= 0 || height <= 0) return@post
+            fill.clipBounds = Rect(0, 0, 0, height)
+            ValueAnimator.ofInt(0, width).apply {
+                duration = 1450L
+                interpolator = android.view.animation.LinearInterpolator()
+                addUpdateListener { animation ->
+                    fill.clipBounds = Rect(0, 0, animation.animatedValue as Int, height)
                 }
                 start()
             }
@@ -148,16 +172,30 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                             Spacer(Modifier.width(6.dp))
                             Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Muted)
                         }
-                        Text(
-                            when (state.mode) {
-                                ControlMode.IR -> state.selectedIrProfile?.let { it.brand + " · " + it.model } ?: "Выбрать ИК-профиль"
-                                ControlMode.WIFI -> state.selected?.name ?: "Wi‑Fi устройство"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Muted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val ready = when (state.mode) {
+                                ControlMode.IR -> state.irAvailable && state.selectedIrProfile != null
+                                ControlMode.WIFI -> state.selected?.isOnline == true
+                            }
+                            Text(
+                                text = when (state.mode) {
+                                    ControlMode.IR -> state.selectedIrProfile?.let { it.brand + " · " + it.model }
+                                        ?: "Выберите устройство"
+                                    ControlMode.WIFI -> state.selected?.name ?: "Выберите устройство"
+                                },
+                                modifier = Modifier.weight(1f, fill = false),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Muted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.width(7.dp))
+                            Box(
+                                Modifier.size(7.dp).clip(CircleShape).background(
+                                    if (ready) Color(0xFF35C873) else Color(0xFF606069)
+                                )
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -177,11 +215,7 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ModeSwitcher(state.mode, vm::setMode)
-            Spacer(Modifier.height(12.dp))
-            StatusCard(state, onClick = vm::openPicker, onReconnect = vm::pairSelected)
-
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 SquareButton(Icons.Default.PowerSettingsNew, "Power", accent = true) { vm.send(RemoteCommand.POWER) }
@@ -326,10 +360,13 @@ private fun SquareButton(icon: ImageVector, label: String, accent: Boolean = fal
         FilledIconButton(
             onClick = onClick,
             modifier = Modifier.size(58.dp),
-            colors = IconButtonDefaults.filledIconButtonColors(containerColor = if (accent) Color(0xFFC52A35) else Panel, contentColor = Color.White)
-        ) { Icon(icon, label) }
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = Panel,
+                contentColor = if (accent) Color(0xFFE84B56) else Color.White
+            )
+        ) { Icon(icon, label, tint = if (accent) Color(0xFFE84B56) else Color.White) }
         Spacer(Modifier.height(5.dp))
-        Text(label, color = if (accent) Color(0xFFFF757F) else Muted, fontSize = 12.sp)
+        Text(label, color = Muted, fontSize = 12.sp)
     }
 }
 
@@ -350,10 +387,11 @@ private fun DPad(onCommand: (RemoteCommand) -> Unit) {
         }
         Button(
             onClick = { onCommand(RemoteCommand.OK) },
-            modifier = Modifier.align(Alignment.Center).size(92.dp),
+            modifier = Modifier.align(Alignment.Center).size(92.dp)
+                .border(1.dp, Color(0xFFBB3D46), CircleShape),
             shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC52A35), contentColor = Color.White)
-        ) { Text("OK", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp) }
+            colors = ButtonDefaults.buttonColors(containerColor = Panel2, contentColor = Color.White)
+        ) { Text("OK", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp) }
     }
 }
 
