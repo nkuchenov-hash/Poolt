@@ -2,6 +2,8 @@ package app.poolt
 
 import android.os.Bundle
 import android.graphics.Color as AndroidColor
+import android.graphics.Rect
+import android.animation.ValueAnimator
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -42,6 +44,7 @@ private val Accent = Color(0xFF9E2027)
 class MainActivity : ComponentActivity() {
     private var splashFinished = false
     private var splashTimerStarted = false
+    private var wordFillView: ImageView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +64,22 @@ class MainActivity : ComponentActivity() {
             )
         )
 
+        // Transparent pixel-perfect copy of the EXISTING Poolt letters.
+        // No additional text/font is rendered on the artwork.
+        val wordFill = ImageView(this).apply {
+            setImageResource(R.drawable.poolt_word_fill)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            clipBounds = Rect(0, 0, 0, 0)
+        }
+        root.addView(
+            wordFill,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER
+            )
+        )
+        wordFillView = wordFill
         setContentView(root)
     }
 
@@ -69,6 +88,26 @@ class MainActivity : ComponentActivity() {
         if (!hasFocus || splashTimerStarted || splashFinished) return
 
         splashTimerStarted = true
+        val fill = wordFillView
+        if (fill != null) {
+            val iw = 864f
+            val ih = 1536f
+            val vw = window.decorView.width.toFloat()
+            val vh = window.decorView.height.toFloat()
+            val scale = maxOf(vw / iw, vh / ih)
+            val left = ((vw - iw * scale) / 2f + 310f * scale).toInt()
+            val right = ((vw - iw * scale) / 2f + 565f * scale).toInt()
+            val top = ((vh - ih * scale) / 2f + 1250f * scale).toInt()
+            val bottom = ((vh - ih * scale) / 2f + 1350f * scale).toInt()
+            fill.clipBounds = Rect(left, top, left, bottom)
+            ValueAnimator.ofInt(left, right).apply {
+                duration = 1500L
+                addUpdateListener {
+                    fill.clipBounds = Rect(left, top, it.animatedValue as Int, bottom)
+                }
+                start()
+            }
+        }
         window.decorView.postDelayed({
             if (isFinishing || isDestroyed || splashFinished) return@postDelayed
             splashFinished = true
