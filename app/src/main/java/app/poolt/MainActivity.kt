@@ -186,13 +186,15 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val ready = when (state.mode) {
-                                ControlMode.IR -> state.irAvailable && state.selectedIrProfile != null
+                                ControlMode.IR -> state.irAvailable && state.selectedIrProfile != null && state.irVerified
                                 ControlMode.WIFI -> state.selected?.isOnline == true
                             }
                             Text(
                                 text = when (state.mode) {
-                                    ControlMode.IR -> state.selectedIrProfile?.let { it.brand + " · " + it.model }
-                                        ?: "Выберите устройство"
+                                    ControlMode.IR -> state.selectedIrProfile?.let {
+                                        it.brand + " · " + it.model +
+                                            if (state.irVerified) "" else " · не проверен"
+                                    } ?: "Выберите устройство"
                                     ControlMode.WIFI -> state.selected?.name ?: "Выберите устройство"
                                 },
                                 modifier = Modifier.weight(1f, fill = false),

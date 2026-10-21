@@ -31,6 +31,7 @@ data class MainUiState(
     val irAvailable: Boolean = false,
     val irProfiles: List<IrProfile> = emptyList(),
     val selectedIrProfile: IrProfile? = null,
+    val irVerified: Boolean = false,
     val irCatalog: List<IrCatalogEntry> = emptyList(),
     val irQuery: String = "",
     val isLoadingIrCatalog: Boolean = false,
@@ -87,7 +88,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val last = selectionPrefs.getString("selected_ir", null)
         if (last != null) {
             initialProfiles.firstOrNull { it.id == last }?.let {
-                _state.value = _state.value.copy(selectedIrProfile = it)
+                _state.value = _state.value.copy(
+                    selectedIrProfile = it,
+                    irVerified = selectionPrefs.getString("verified_ir", "") == it.id
+                )
             }
         }
         val ip = selectionPrefs.getString("wifi_ip", null)
@@ -120,10 +124,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectIrProfile(profile: IrProfile) {
-        selectionPrefs.edit().putString("selected_ir", profile.id).putString("mode", "IR").apply()
+        selectionPrefs.edit().putString("selected_ir", profile.id)
+            .remove("verified_ir").putString("mode", "IR").apply()
         _state.value = _state.value.copy(
             mode = ControlMode.IR,
             selectedIrProfile = profile,
+            irVerified = false,
             showDevicePicker = false,
             connectionMessage = if (_state.value.irAvailable) "ИК-профиль выбран" else "На телефоне нет ИК-порта"
         )
@@ -137,7 +143,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val currentId = _state.value.selectedIrProfile?.id
                 _state.value = _state.value.copy(
                     irProfiles = profiles,
-                    selectedIrProfile = profiles.firstOrNull { it.id == currentId } ?: profiles.firstOrNull()
+                    selectedIrProfile = profiles.firstOrNull { it.id == currentId } ?: profiles.firstOrNull(),
+                    irVerified = profiles.any { it.id == currentId } && _state.value.irVerified
                 )
             }
         }
@@ -269,10 +276,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun confirmIrTrial() {
         val profile = _state.value.irTrialProfile ?: return
-        selectionPrefs.edit().putString("selected_ir", profile.id).putString("mode", "IR").apply()
+        selectionPrefs.edit().putString("selected_ir", profile.id)
+            .putString("verified_ir", profile.id).putString("mode", "IR").apply()
         val merged = _state.value.irProfiles.filterNot { it.id == profile.id } + profile
         _state.value = _state.value.copy(
-            irProfiles = merged, selectedIrProfile = profile,
+            irProfiles = merged, selectedIrProfile = profile, irVerified = true,
             irTrialProfile = null, irTestMessage = "", mode = ControlMode.IR,
             showDevicePicker = false, connectionMessage = "ИК-профиль выбран · " + profile.brand
         )
