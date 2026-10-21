@@ -366,7 +366,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 pointerChecking = true, pointerReady = false, pointerConfirmed = false,
                 pointerStatus = "Проверяем поддержку курсора webOS…"
             )
-            val result = lgDriver.probePointer(device)
+            val result = runCatching {
+                kotlinx.coroutines.withTimeout(10000L) { lgDriver.probePointer(device) }
+            }.getOrElse { Result.failure(it) }
             if (_state.value.selected?.id != device.id) return@launch
             val previousConfirmation = selectionPrefs.getString("confirmed_pointer_ip", null) == device.address
             _state.value = _state.value.copy(

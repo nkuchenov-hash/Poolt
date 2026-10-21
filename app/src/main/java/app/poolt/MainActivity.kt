@@ -192,10 +192,21 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                             Text(
                                 text = when (state.mode) {
                                     ControlMode.IR -> state.selectedIrProfile?.let {
-                                        it.brand + " · " + it.model +
-                                            if (state.irVerified) "" else " · не проверен"
+                                        it.brand + " · ИК · " +
+                                            if (state.irVerified) "кнопки проверены" else "совместимость не проверена"
                                     } ?: "Выберите устройство"
-                                    ControlMode.WIFI -> state.selected?.name ?: "Выберите устройство"
+                                    ControlMode.WIFI -> {
+                                        val device = state.selected
+                                        when {
+                                            device == null -> "Выберите устройство"
+                                            device.driverId != "lg.webos" -> device.name + " · Wi-Fi"
+                                            !device.isOnline -> "LG webOS · не подключён"
+                                            state.pointerConfirmed -> "LG webOS · курсор проверен"
+                                            state.pointerChecking -> "LG webOS · проверяем курсор"
+                                            state.pointerReady -> "LG webOS · курсор не проверен"
+                                            else -> "LG webOS · курсор недоступен"
+                                        }
+                                    }
                                 },
                                 modifier = Modifier.weight(1f, fill = false),
                                 style = MaterialTheme.typography.labelMedium,
