@@ -29,6 +29,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +46,7 @@ private val Bg = Color(0xFF0A0A0C)
 private val Panel = Color(0xFF17171B)
 private val Panel2 = Color(0xFF202026)
 private val Muted = Color(0xFF9A9AA1)
-private val Accent = Color(0xFF9E2027)
+private val Accent = Color(0xFFE6263E)
 
 class MainActivity : ComponentActivity() {
     private var splashFinished = false
@@ -142,6 +144,11 @@ class MainActivity : ComponentActivity() {
                         background = Bg,
                         surface = Bg,
                         primary = Accent,
+                        onPrimary = Color.White,
+                        secondary = Accent,
+                        onSecondary = Color.White,
+                        primaryContainer = Panel2,
+                        onPrimaryContainer = Color.White,
                         onBackground = Color.White,
                         onSurface = Color.White
                     )
@@ -155,6 +162,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PooltApp(vm: MainViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val view = LocalView.current
+    val send: (RemoteCommand) -> Unit = { command ->
+        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        vm.send(command)
+    }
 
     Scaffold(
         containerColor = Bg,
@@ -218,14 +230,14 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
             Spacer(Modifier.height(14.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                SquareButton(Icons.Default.PowerSettingsNew, "Power", accent = true) { vm.send(RemoteCommand.POWER) }
-                SquareButton(Icons.Default.Input, "Source") { vm.send(RemoteCommand.SOURCE) }
-                SquareButton(Icons.Default.Settings, "Settings") { vm.send(RemoteCommand.SETTINGS) }
-                SquareButton(Icons.Default.Home, "Home") { vm.send(RemoteCommand.HOME) }
+                SquareButton(Icons.Default.PowerSettingsNew, "Power", accent = true) { send(RemoteCommand.POWER) }
+                SquareButton(Icons.Default.Input, "Source") { send(RemoteCommand.SOURCE) }
+                SquareButton(Icons.Default.Settings, "Settings") { send(RemoteCommand.SETTINGS) }
+                SquareButton(Icons.Default.Home, "Home") { send(RemoteCommand.HOME) }
             }
 
             Spacer(Modifier.height(22.dp))
-            DPad(vm::send)
+            DPad(send)
             Spacer(Modifier.height(22.dp))
 
             Row(
@@ -237,37 +249,37 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                     top = Icons.Default.Add,
                     center = "VOL",
                     bottom = Icons.Default.Remove,
-                    onTop = { vm.send(RemoteCommand.VOLUME_UP) },
-                    onBottom = { vm.send(RemoteCommand.VOLUME_DOWN) }
+                    onTop = { send(RemoteCommand.VOLUME_UP) },
+                    onBottom = { send(RemoteCommand.VOLUME_DOWN) }
                 )
                 Column(
                     Modifier.weight(1.25f),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    WideButton(Icons.Default.VolumeOff, "Mute") { vm.send(RemoteCommand.MUTE) }
-                    WideButton(Icons.Default.Menu, "Menu") { vm.send(RemoteCommand.MENU) }
-                    WideButton(Icons.Default.ArrowBack, "Back") { vm.send(RemoteCommand.BACK) }
+                    WideButton(Icons.Default.VolumeOff, "Mute") { send(RemoteCommand.MUTE) }
+                    WideButton(Icons.Default.Menu, "Menu") { send(RemoteCommand.MENU) }
+                    WideButton(Icons.Default.ArrowBack, "Back") { send(RemoteCommand.BACK) }
                 }
                 TallRocker(
                     Modifier.weight(1f),
                     top = Icons.Default.KeyboardArrowUp,
                     center = "CH",
                     bottom = Icons.Default.KeyboardArrowDown,
-                    onTop = { vm.send(RemoteCommand.CHANNEL_UP) },
-                    onBottom = { vm.send(RemoteCommand.CHANNEL_DOWN) }
+                    onTop = { send(RemoteCommand.CHANNEL_UP) },
+                    onBottom = { send(RemoteCommand.CHANNEL_DOWN) }
                 )
             }
 
             Spacer(Modifier.height(18.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                WideButton(Icons.Default.FastRewind, "Rew", Modifier.weight(1f)) { vm.send(RemoteCommand.REWIND) }
-                WideButton(Icons.Default.PlayArrow, "Play", Modifier.weight(1f)) { vm.send(RemoteCommand.PLAY_PAUSE) }
-                WideButton(Icons.Default.FastForward, "Fwd", Modifier.weight(1f)) { vm.send(RemoteCommand.FAST_FORWARD) }
+                WideButton(Icons.Default.FastRewind, "Rew", Modifier.weight(1f)) { send(RemoteCommand.REWIND) }
+                WideButton(Icons.Default.PlayArrow, "Play", Modifier.weight(1f)) { send(RemoteCommand.PLAY_PAUSE) }
+                WideButton(Icons.Default.FastForward, "Fwd", Modifier.weight(1f)) { send(RemoteCommand.FAST_FORWARD) }
             }
 
             Spacer(Modifier.height(18.dp))
-            NumberPad(vm::send)
+            NumberPad(send)
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -362,9 +374,9 @@ private fun SquareButton(icon: ImageVector, label: String, accent: Boolean = fal
             modifier = Modifier.size(58.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = Panel,
-                contentColor = if (accent) Color(0xFFE84B56) else Color.White
+                contentColor = if (accent) Color(0xFFF22E47) else Color.White
             )
-        ) { Icon(icon, label, tint = if (accent) Color(0xFFE84B56) else Color.White) }
+        ) { Icon(icon, label, tint = if (accent) Color(0xFFF22E47) else Color.White) }
         Spacer(Modifier.height(5.dp))
         Text(label, color = Muted, fontSize = 12.sp)
     }
@@ -388,7 +400,7 @@ private fun DPad(onCommand: (RemoteCommand) -> Unit) {
         Button(
             onClick = { onCommand(RemoteCommand.OK) },
             modifier = Modifier.align(Alignment.Center).size(92.dp)
-                .border(1.dp, Color(0xFFBB3D46), CircleShape),
+                .border(1.dp, Color(0xFFE6263E), CircleShape),
             shape = CircleShape,
             colors = ButtonDefaults.buttonColors(containerColor = Panel2, contentColor = Color.White)
         ) { Text("OK", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp) }
