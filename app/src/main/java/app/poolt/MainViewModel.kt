@@ -30,6 +30,9 @@ data class MainUiState(
     val irCatalog: List<IrCatalogEntry> = emptyList(),
     val irQuery: String = "",
     val isLoadingIrCatalog: Boolean = false,
+    val irTrialProfile: IrProfile? = null,
+    val isTestingIr: Boolean = false,
+    val irTestMessage: String = "",
     val devices: List<Device> = emptyList(),
     val selected: Device? = null,
     val presets: List<DevicePreset> = listOf(
@@ -162,6 +165,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    fun clearIrTrial() {
+        _state.value = _state.value.copy(
+            irTrialProfile = null, irTestMessage = "", isTestingIr = false
+        )
+    }
+
+    fun testIrEntry(entry: IrCatalogEntry) {
+        if (_state.value.isTestingIr) return
+        if (!_state.value.irAvailable) {
+            _state.value = _state.value.copy(irTestMessage = "На телефоне нет ИК-передатчика")
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                irTrialProfile = null, isTestingIr = true,
+                irTestMessage = "Загружаем код…"
+            )
+            val result = withContext(Dispatchers.IO) { irRepository.fetchIrdbProfile(entry) }
+            if (result.isFailure) {
+                _state.value = _state.value.copy(
+                    isTestingIr = false,
+                    irTestMessage = "Код не поддерживается: " + (result.exceptionOrNull()?.message ?: "ошибка")
+                )
+                return@launch
+            }
+            val profile = result.getOrThrow()
+            val sent = irTransmitter.send(profile, RemoteCommand.POWER)
+            _state.value = _state.value.copy(
+                isTestingIr = false,
+                irTrialProfile = if (sent.isSuccess) profile else null,
+                irTestMessage = if (sent.isSuccess) "Команда отправлена. Телевизор среагировал?"
+                    else "Не удалось отправить POWER: " + (sent.exceptionOrNull()?.message ?: "ошибка")
+            )
+        }
+    }
+
+    fun confirmIrTrial() {
+        val profile = _state.value.irTrialProfile ?: return
+        val merged = _state.value.irProfiles.filterNot { it.id == profile.id } + profile
+        _state.value = _state.value.copy(
+            irProfiles = merged, selectedIrProfile = profile,
+            irTrialProfile = null, irTestMessage = "", mode = ControlMode.IR,
+            showDevicePicker = false, connectionMessage = "ИК-профиль выбран · " + profile.brand
+        )
+    }
+
     fun closePicker() { _state.value = _state.value.copy(showDevicePicker = false) }
     fun setManualIp(value: String) { _state.value = _state.value.copy(manualIp = value.filter { it.isDigit() || it == '.' }) }
 
