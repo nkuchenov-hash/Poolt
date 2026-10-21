@@ -62,6 +62,7 @@ private fun kindOf(type: DeviceType): String = when (type) {
     else -> "OTHER"
 }
 
+
 @Composable
 fun DevicePickerContent(state: MainUiState, vm: MainViewModel) {
     var wifi by remember { mutableStateOf(state.mode == ControlMode.WIFI) }
@@ -70,19 +71,27 @@ fun DevicePickerContent(state: MainUiState, vm: MainViewModel) {
     var testing by remember { mutableStateOf(false) }
     var trialIndex by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
+    var verified by remember(brand, trialIndex) { mutableStateOf(setOf<app.poolt.core.RemoteCommand>()) }
+    var showRawCodes by remember { mutableStateOf(false) }
+    val scroll = rememberScrollState()
+    LaunchedEffect(wifi, type, brand, testing, trialIndex) { scroll.scrollTo(0) }
 
     val candidates = remember(state.irCatalog, type, brand) {
         if (type == null || brand == null) emptyList()
         else state.irCatalog.filter { kindOf(it.deviceType) == type && it.brand.equals(brand, true) }
-            .sortedBy { it.codeSet.lowercase() }
+            .sortedWith(compareByDescending<IrCatalogEntry> { it.codeSet.contains("LG", true) }
+                .thenBy { it.codeSet.lowercase() })
     }
     val local = remember(state.irProfiles, type, brand) {
-        state.irProfiles.filter { type != null && brand != null &&
-            kindOf(it.deviceType) == type && it.brand.equals(brand, true) }
+        state.irProfiles.filter {
+            type != null && brand != null &&
+                kindOf(it.deviceType) == type && it.brand.equals(brand, true)
+        }
     }
-
+    val screen = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
     Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp)
+        Modifier.fillMaxWidth().height(screen * 0.78f)
+            .padding(horizontal = 20.dp).padding(bottom = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (!wifi && (type != null || brand != null || testing)) {
@@ -92,180 +101,207 @@ fun DevicePickerContent(state: MainUiState, vm: MainViewModel) {
                         brand != null -> { brand = null; search = ""; vm.clearIrTrial() }
                         else -> { type = null; search = "" }
                     }
-                }) { Icon(Icons.Default.ArrowBack, "Назад", tint = Color.White) }
+                }) { Icon(Icons.Default.ArrowBack, "Назад") }
             }
             Column(Modifier.weight(1f)) {
-                Text("Добавить устройство", fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    when {
-                        wifi -> "Поиск в домашней сети"
-                        testing -> "Проверка пульта"
-                        brand != null -> "${kinds.firstOrNull { it.code == type }?.title ?: "Устройство"} · ${brand}"
-                        type != null -> "Выберите производителя"
-                        else -> "Что будем управлять?"
-                    },
-                    color = PickerMuted,
-                    fontSize = 14.sp
-                )
+                Text("Добавить устройство", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(when {
+                    wifi -> "Телевизоры в вашей сети"
+                    testing -> "Проверяем каждую кнопку"
+                    brand != null -> "${brand} · ${kinds.firstOrNull { it.code == type }?.title ?: "Устройство"}"
+                    type != null -> "Выберите производителя"
+                    else -> "Выберите тип устройства"
+                }, color = PickerMuted, fontSize = 16.sp)
             }
         }
-
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(10.dp))
         Row(
-            Modifier.fillMaxWidth().background(PickerTile, RoundedCornerShape(14.dp)).padding(4.dp)
+            Modifier.fillMaxWidth().background(PickerTile, RoundedCornerShape(13.dp)).padding(4.dp)
         ) {
-            listOf(false to "ИК-пульт", true to "Wi-Fi").forEach { (item, text) ->
+            listOf(false to "ИК", true to "Wi-Fi").forEach { (flag, label) ->
                 Box(
                     Modifier.weight(1f)
-                        .background(if (wifi == item) Color(0xFF48484E) else Color.Transparent, RoundedCornerShape(11.dp))
-                        .clickable { wifi = item }
-                        .padding(vertical = 12.dp),
+                        .background(if (wifi == flag) Color(0xFF48484D) else Color.Transparent, RoundedCornerShape(10.dp))
+                        .clickable { wifi = flag }
+                        .padding(vertical = 13.dp),
                     contentAlignment = Alignment.Center
-                ) { Text(text, fontWeight = FontWeight.SemiBold, color = Color.White) }
+                ) { Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
             }
         }
-        Spacer(Modifier.height(16.dp))
-
-        if (wifi) {
-            WifiDevicePicker(state, vm)
-        } else {
-            if (!state.irAvailable) {
-                Text("Android не обнаружил ИК-передатчик на телефоне. Выбор кодов доступен, но для передачи сигналов нужен ИК-порт.", color = Color(0xFFFFB66B), fontSize = 14.sp)
-                Spacer(Modifier.height(12.dp))
-            }
-            when {
-                type == null -> {
-                    Text("Тип устройства", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                    Spacer(Modifier.height(10.dp))
-                    kinds.forEach { item ->
-                        PickerRow(item.title, "", item.icon) {
-                            type = item.code; brand = null; search = ""; testing = false
-                        }
-                    }
-                }
-                brand == null -> {
-                    OutlinedTextField(
-                        value = search,
-                        onValueChange = { search = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Найти бренд, например LG") },
-                        leadingIcon = { Icon(Icons.Default.Search, null) },
-                        singleLine = true
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll)) {
+            if (wifi) {
+                WifiDevicePicker(state, vm)
+            } else {
+                if (!state.irAvailable) {
+                    Text(
+                        "В телефоне не найден ИК-передатчик. Для Smart TV можно использовать Wi-Fi.",
+                        color = Color(0xFFFFB16D), fontSize = 16.sp
                     )
                     Spacer(Modifier.height(12.dp))
-                    val names = remember(type, state.irCatalog, state.irProfiles) {
-                        (state.irCatalog.filter { kindOf(it.deviceType) == type }.map { it.brand } +
-                         state.irProfiles.filter { kindOf(it.deviceType) == type }.map { it.brand })
-                            .distinctBy { it.lowercase() }
-                            .sortedWith(compareBy<String> {
-                                val common = listOf("LG", "Samsung", "Sony", "Philips", "Xiaomi", "Panasonic", "TCL", "Hisense")
-                                val index = common.indexOfFirst { popular -> it.equals(popular, true) }
-                                if (index >= 0) index else 100
-                            }.thenBy { it.lowercase() })
-                    }
-                    if (state.isLoadingIrCatalog && names.isEmpty()) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text("Загружаем каталог производителей…", color = PickerMuted)
-                    }
-                    if (names.isEmpty() && !state.isLoadingIrCatalog) {
-                        Text("Каталог недоступен. Нажмите «Обновить» и проверьте соединение.", color = PickerMuted)
-                    }
-                    names.filter { search.isBlank() || it.contains(search, true) }.take(70).forEach { name ->
-                        PickerRow(name, "", Icons.Default.ChevronRight) { brand = name; search = ""; testing = false }
-                    }
-                    if (!state.isLoadingIrCatalog) TextButton(onClick = vm::loadWorldwideIrCatalog) {
-                        Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(6.dp)); Text("Обновить каталог")
-                    }
                 }
-                testing -> {
-                    Text("Наведите телефон на ${brand}. Проверим кнопку питания.", fontSize = 16.sp)
-                    Spacer(Modifier.height(14.dp))
-                    if (candidates.isNotEmpty()) {
-                        Text("Вариант ${trialIndex + 1} из ${candidates.size}", color = PickerMuted)
-                        Text("Код-набор: ${candidates[trialIndex.coerceIn(0, candidates.lastIndex)].codeSet}",
-                            fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(14.dp))
-                        Button(
-                            onClick = { vm.testIrEntry(candidates[trialIndex.coerceIn(0, candidates.lastIndex)]) },
-                            enabled = !state.isTestingIr,
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = PickerAccent)
-                        ) {
-                            if (state.isTestingIr) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                            else Icon(Icons.Default.PowerSettingsNew, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Проверить POWER", fontSize = 16.sp)
-                        }
-                        if (state.irTestMessage.isNotBlank()) {
-                            Spacer(Modifier.height(10.dp))
-                            Text(state.irTestMessage, color = PickerMuted)
-                        }
-                        if (state.irTrialProfile != null) {
-                            Spacer(Modifier.height(10.dp))
-                            Button(
-                                onClick = vm::confirmIrTrial,
-                                modifier = Modifier.fillMaxWidth().height(50.dp)
-                            ) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(8.dp)); Text("Работает — сохранить") }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = {
-                                trialIndex = (trialIndex + 1) % candidates.size
-                                vm.clearIrTrial()
-                            },
-                            modifier = Modifier.fillMaxWidth().height(50.dp)
-                        ) { Text("Не работает — следующий код") }
-                    } else {
-                        Text("Для этого бренда нет загруженных код-наборов. Обновите каталог или выберите доступный встроенный профиль.", color = PickerMuted)
-                    }
-                }
-                else -> {
-                    Text("Модель или код пульта", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(4.dp))
-                    Text("Не знаете модель? Приложение поможет проверить коды по очереди.", color = PickerMuted, fontSize = 14.sp)
-                    Spacer(Modifier.height(14.dp))
-                    Button(
-                        onClick = { testing = true; trialIndex = 0; vm.clearIrTrial() },
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PickerAccent)
-                    ) { Icon(Icons.Default.AutoFixHigh, null); Spacer(Modifier.width(9.dp)); Text("Не знаю модель — подобрать код", fontSize = 15.sp) }
-                    Spacer(Modifier.height(16.dp))
-                    if (local.isNotEmpty()) {
-                        Text("Быстрый выбор", color = PickerMuted, fontWeight = FontWeight.SemiBold)
-                        local.forEach { profile ->
-                            PickerRow(profile.model, "Встроенный профиль", Icons.Default.SettingsRemote) {
-                                vm.selectIrProfile(profile)
+                when {
+                    type == null -> {
+                        Text("Что будем управлять?", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(9.dp))
+                        kinds.forEach { item ->
+                            PickerRow(item.title, "", item.icon) {
+                                type = item.code; brand = null; search = ""; testing = false
                             }
                         }
-                        Spacer(Modifier.height(12.dp))
                     }
-                    if (candidates.isNotEmpty()) {
+                    brand == null -> {
                         OutlinedTextField(
-                            value = search,
-                            onValueChange = { search = it },
+                            value = search, onValueChange = { search = it },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Модель / номер код-набора") },
-                            leadingIcon = { Icon(Icons.Default.Search, null) },
-                            singleLine = true
+                            label = { Text("Найти бренд, например LG") },
+                            leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Text("Дополнительные коды IRDB", color = PickerMuted, fontWeight = FontWeight.SemiBold)
-                        candidates.withIndex().filter {
-                            search.isBlank() || it.value.codeSet.contains(search, true)
-                        }.take(60).forEach { indexed ->
-                            PickerRow("Набор ${indexed.value.codeSet}", "Проверить совместимость", Icons.Default.SettingsRemote) {
-                                trialIndex = indexed.index
-                                testing = true
-                                vm.clearIrTrial()
+                        Spacer(Modifier.height(10.dp))
+                        val names = remember(type, state.irCatalog, state.irProfiles) {
+                            (state.irCatalog.filter { kindOf(it.deviceType) == type }.map { it.brand } +
+                             state.irProfiles.filter { kindOf(it.deviceType) == type }.map { it.brand })
+                                .distinctBy { it.lowercase() }
+                                .sortedWith(compareBy<String> {
+                                    val common = listOf("LG", "Samsung", "Sony", "Xiaomi", "Philips", "Panasonic", "TCL", "Hisense")
+                                    val idx = common.indexOfFirst { popular -> it.equals(popular, true) }
+                                    if (idx < 0) 100 else idx
+                                }.thenBy { it.lowercase() })
+                        }
+                        names.filter { search.isBlank() || it.contains(search, true) }.take(80).forEach { name ->
+                            PickerRow(name, "", Icons.Default.ChevronRight) {
+                                brand = name; search = ""; showRawCodes = false
                             }
                         }
-                    } else if (state.isLoadingIrCatalog) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                    } else if (local.isEmpty()) {
-                        Text("Коды для выбранного бренда не найдены. Обновите каталог.", color = PickerMuted)
+                        if (names.isEmpty()) {
+                            Text(if (state.isLoadingIrCatalog) "Загружаем каталог…" else "Не найдено брендов. Проверьте интернет.",
+                                color = PickerMuted, fontSize = 16.sp)
+                        }
+                        TextButton(onClick = vm::loadWorldwideIrCatalog) { Text("Обновить каталог") }
                     }
-                    TextButton(onClick = vm::loadWorldwideIrCatalog) {
-                        Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(6.dp)); Text("Обновить код-наборы")
+                    testing -> {
+                        Text("Код ${trialIndex + 1} из ${candidates.size.coerceAtLeast(1)}",
+                            fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Телевизор должен реагировать именно на указанную кнопку. Одного включения недостаточно.",
+                            fontSize = 16.sp, color = PickerMuted)
+                        Spacer(Modifier.height(12.dp))
+                        if (candidates.isNotEmpty()) {
+                            if (state.irTrialProfile == null && !state.isTestingIr) {
+                                Button(
+                                    onClick = { vm.testIrEntry(candidates[trialIndex.coerceIn(0, candidates.lastIndex)]) },
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37373E), contentColor = Color.White)
+                                ) { Text("Загрузить код для проверки", fontSize = 16.sp) }
+                            }
+                            if (state.isTestingIr) LinearProgressIndicator(Modifier.fillMaxWidth())
+                            if (state.irTestMessage.isNotBlank()) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(state.irTestMessage, color = PickerMuted, fontSize = 16.sp)
+                            }
+                            val profile = state.irTrialProfile
+                            if (profile != null) {
+                                val tests = listOf(
+                                    app.poolt.core.RemoteCommand.VOLUME_UP to "Громкость +",
+                                    app.poolt.core.RemoteCommand.UP to "Вверх",
+                                    app.poolt.core.RemoteCommand.DOWN to "Вниз",
+                                    app.poolt.core.RemoteCommand.LEFT to "Влево",
+                                    app.poolt.core.RemoteCommand.RIGHT to "Вправо",
+                                    app.poolt.core.RemoteCommand.OK to "OK"
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                tests.forEach { (cmd, label) ->
+                                    val supported = profile.commands.containsKey(cmd)
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { vm.sendIrTestCommand(cmd) },
+                                            enabled = supported,
+                                            modifier = Modifier.weight(1f),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                                        ) { Text(label, fontSize = 16.sp) }
+                                        Spacer(Modifier.width(8.dp))
+                                        Checkbox(
+                                            checked = cmd in verified,
+                                            onCheckedChange = { ok ->
+                                                verified = if (ok) verified + cmd else verified - cmd
+                                            },
+                                            enabled = supported,
+                                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF2FAE69))
+                                        )
+                                        Text("Работает", fontSize = 14.sp, color = PickerMuted)
+                                    }
+                                }
+                                Spacer(Modifier.height(10.dp))
+                                Button(
+                                    onClick = vm::confirmIrTrial,
+                                    enabled = verified.size == tests.size,
+                                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF35353C), contentColor = Color.White
+                                    )
+                                ) { Text("Все кнопки работают — сохранить", fontSize = 16.sp) }
+                                if (verified.size < tests.size) {
+                                    Text("Подтверждено ${verified.size} из ${tests.size}. Непроверенный пульт не сохраняем как подходящий.",
+                                        color = PickerMuted, fontSize = 14.sp)
+                                }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    trialIndex = (trialIndex + 1) % candidates.size
+                                    vm.clearIrTrial()
+                                    verified = emptySet()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Не подходит — следующий код", fontSize = 16.sp, color = Color.White) }
+                        } else Text("Для этой модели нет доступных кодов. Попробуйте Wi-Fi.", fontSize = 16.sp)
+                    }
+                    else -> {
+                        Text("Телевизор ${brand}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
+                        Text("Если это Smart TV, лучше Wi-Fi: будут доступны дополнительные функции, включая курсор на LG.",
+                            color = PickerMuted, fontSize = 16.sp)
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = { wifi = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Icon(Icons.Default.Wifi, null); Spacer(Modifier.width(7.dp))
+                            Text("Найти Smart TV по Wi-Fi", color = Color.White, fontSize = 16.sp) }
+                        Spacer(Modifier.height(10.dp))
+                        Button(
+                            onClick = { testing = true; trialIndex = 0; verified = emptySet(); vm.clearIrTrial() },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF35353B), contentColor = Color.White)
+                        ) { Text("Не знаю модель — проверить коды", fontSize = 16.sp) }
+                        if (local.isNotEmpty()) {
+                            Spacer(Modifier.height(14.dp))
+                            Text("Встроенные пульты", color = PickerMuted, fontSize = 16.sp)
+                            local.forEach { profile ->
+                                PickerRow(profile.model, "Не проверен на вашем телевизоре",
+                                    Icons.Default.SettingsRemote) { vm.selectIrProfile(profile) }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = { showRawCodes = !showRawCodes }) {
+                            Text(if (showRawCodes) "Скрыть код-наборы" else "Показать код-наборы (для опытных)")
+                        }
+                        if (showRawCodes) {
+                            OutlinedTextField(
+                                value = search, onValueChange = { search = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Номер кода") }, singleLine = true
+                            )
+                            candidates.withIndex()
+                                .filter { search.isEmpty() || it.value.codeSet.contains(search, true) }
+                                .take(50).forEach { indexed ->
+                                    PickerRow("Код ${indexed.value.codeSet}", "", Icons.Default.ChevronRight) {
+                                        trialIndex = indexed.index; testing = true; vm.clearIrTrial()
+                                    }
+                                }
+                        }
                     }
                 }
             }
@@ -291,38 +327,59 @@ private fun PickerRow(title: String, subtitle: String, icon: ImageVector, onClic
     }
 }
 
+
 @Composable
 private fun WifiDevicePicker(state: MainUiState, vm: MainViewModel) {
-    Text("Smart TV и устройства в одной сети Wi-Fi", color = PickerMuted)
-    Spacer(Modifier.height(10.dp))
+    var manual by remember { mutableStateOf(false) }
+    Text("Телефон и телевизор должны быть в одной сети Wi-Fi.", color = PickerMuted, fontSize = 16.sp)
+    Spacer(Modifier.height(12.dp))
     Button(
         onClick = vm::scan,
-        modifier = Modifier.fillMaxWidth().height(52.dp),
         enabled = !state.isScanning,
+        modifier = Modifier.fillMaxWidth().height(54.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF35353B),
-            contentColor = Color.White,
-            disabledContainerColor = Color(0xFF29292D),
-            disabledContentColor = Color.White
+            containerColor = Color(0xFF303036), contentColor = Color.White
         )
     ) {
-        if (state.isScanning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-        else Icon(Icons.Default.Refresh, null)
-        Spacer(Modifier.width(8.dp))
-        Text("Найти устройства", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        if (state.isScanning) CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+        else Icon(Icons.Default.Search, null, tint = Color.White)
+        Spacer(Modifier.width(9.dp))
+        Text(if (state.isScanning) "Поиск…" else "Найти устройства",
+            fontSize = 17.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
     }
-    state.devices.forEach { device ->
-        PickerRow(device.name, device.driverId, Icons.Default.Wifi) { vm.selectDevice(device) }
+    Spacer(Modifier.height(14.dp))
+    if (state.wifiScanMessage.isNotBlank()) {
+        Text(state.wifiScanMessage, color = PickerMuted, fontSize = 16.sp)
+        Spacer(Modifier.height(8.dp))
     }
-    Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
-        value = state.manualIp,
-        onValueChange = vm::setManualIp,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text("IP-адрес телевизора") },
-        singleLine = true
-    )
-    state.presets.forEach { preset ->
-        PickerRow(preset.brand, preset.model, Icons.Default.Tv) { vm.addManual(preset) }
+    if (state.devices.isNotEmpty()) {
+        Text("Найденные устройства", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        state.devices.forEach { device ->
+            PickerRow(device.name, "Нажмите для подключения", Icons.Default.Tv) { vm.selectDevice(device) }
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    TextButton(onClick = { manual = !manual }, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.Tune, null, tint = PickerMuted)
+        Spacer(Modifier.width(6.dp))
+        Text(if (manual) "Скрыть ручную настройку" else "Не нашли телевизор? Ручная настройка",
+            color = PickerMuted, fontSize = 16.sp)
+    }
+    if (manual) {
+        Text("Используйте этот раздел, только если телевизор не находится автоматически.",
+            fontSize = 16.sp, color = PickerMuted)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = state.manualIp, onValueChange = vm::setManualIp,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("IP-адрес ТВ (дополнительно)") }, singleLine = true
+        )
+        Spacer(Modifier.height(8.dp))
+        state.presets.forEach { preset ->
+            PickerRow(preset.brand + " Smart TV", "Подключить вручную", Icons.Default.Wifi) {
+                vm.addManual(preset)
+            }
+        }
     }
 }
