@@ -49,6 +49,10 @@ data class MainUiState(
     val wifiScanMessage: String = "",
     val hasScannedWifi: Boolean = false,
     val isPairing: Boolean = false,
+    val pointerChecking: Boolean = false,
+    val pointerReady: Boolean = false,
+    val pointerConfirmed: Boolean = false,
+    val pointerStatus: String = "",
     val showDevicePicker: Boolean = false,
     val manualIp: String = "",
     val connectionMessage: String = "",
@@ -295,6 +299,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(
             mode = ControlMode.WIFI,
             selected = device,
+            pointerReady = false,
+            pointerConfirmed = false,
+            pointerStatus = "",
             showDevicePicker = false
         )
         pairSelected()
@@ -319,6 +326,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(
             mode = ControlMode.WIFI,
             selected = device,
+            pointerReady = false,
+            pointerConfirmed = false,
+            pointerStatus = "",
             showDevicePicker = false
         )
         pairSelected()
@@ -328,14 +338,62 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val device = _state.value.selected ?: return
         val driver = registry.driverFor(device) ?: return
         viewModelScope.launch {
-            _state.value = _state.value.copy(isPairing = true, connectionMessage = "Подключение к " + device.name + "…")
+            _state.value = _state.value.copy(
+                isPairing = true, pointerChecking = false,
+                pointerReady = false, pointerConfirmed = false,
+                pointerStatus = "", connectionMessage = "Подключение к " + device.name + "…"
+            )
             val result = driver.pair(device)
+            if (_state.value.selected?.id != device.id) return@launch
             _state.value = _state.value.copy(
                 isPairing = false,
-                selected = if (result.isSuccess) device.copy(isOnline = true) else device.copy(isOnline = false),
-                connectionMessage = if (result.isSuccess) "Wi‑Fi подключено" else (result.exceptionOrNull()?.message ?: "Ошибка подключения")
+                selected = device.copy(isOnline = result.isSuccess),
+                connectionMessage = if (result.isSuccess) "Wi-Fi подключено"
+                    else (result.exceptionOrNull()?.message ?: "Ошибка подключения")
+            )
+            if (result.isSuccess && device.driverId == "lg.webos") {
+                checkLgPointer()
+            }
+        }
+    }
+
+    fun checkLgPointer() {
+        val device = _state.value.selected ?: return
+        if (device.driverId != "lg.webos" || !device.isOnline) return
+        if (_state.value.pointerChecking) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                pointerChecking = true, pointerReady = false, pointerConfirmed = false,
+                pointerStatus = "Проверяем поддержку курсора webOS…"
+            )
+            val result = lgDriver.probePointer(device)
+            if (_state.value.selected?.id != device.id) return@launch
+            val previousConfirmation = selectionPrefs.getString("confirmed_pointer_ip", null) == device.address
+            _state.value = _state.value.copy(
+                pointerChecking = false,
+                pointerReady = result.isSuccess,
+                pointerConfirmed = result.isSuccess && previousConfirmation,
+                pointerStatus = if (result.isSuccess) "Управление курсором доступно. Проверьте движение на ТВ."
+                    else "Управление курсором недоступно: " +
+                        (result.exceptionOrNull()?.localizedMessage ?: "LG не разрешил подключение")
             )
         }
+    }
+
+    fun confirmLgPointerWorks() {
+        val device = _state.value.selected ?: return
+        if (device.driverId != "lg.webos" || !_state.value.pointerReady || !device.isOnline) return
+        selectionPrefs.edit().putString("confirmed_pointer_ip", device.address).apply()
+        _state.value = _state.value.copy(
+            pointerConfirmed = true, pointerStatus = "Управление курсором проверено на телевизоре"
+        )
+    }
+
+    fun reportLgPointerProblem() {
+        selectionPrefs.edit().remove("confirmed_pointer_ip").apply()
+        _state.value = _state.value.copy(
+            pointerConfirmed = false, pointerStatus = "Курсор не подтверждён. Попробуйте повторить подключение."
+        )
     }
 
     fun movePointer(dx: Float, dy: Float) {

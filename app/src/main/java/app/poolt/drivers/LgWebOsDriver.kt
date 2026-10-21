@@ -53,6 +53,18 @@ class LgWebOsDriver(private val context: Context) : DeviceDriver {
     suspend fun scrollPointer(device: Device, dx: Int, dy: Int): Result<Unit> =
         pointerCommand(device, "type:scroll\ndx:$dx\ndy:$dy\n\n")
 
+    suspend fun probePointer(device: Device): Result<Unit> = pointerMutex.withLock {
+        val ip = device.address ?: return@withLock Result.failure(
+            IllegalArgumentException("Не найден адрес телевизора")
+        )
+        if (pointerSocket != null && activePointerIp == ip) return@withLock Result.success(Unit)
+        pointerSocket?.close(1000, "recheck")
+        pointerControlSocket?.close(1000, "recheck")
+        pointerSocket = null
+        activePointerIp = null
+        establishPointer(device)
+    }
+
     private suspend fun sendPointer(device: Device, button: String): Result<Unit> =
         pointerCommand(device, "type:button\nname:$button\n\n")
 
