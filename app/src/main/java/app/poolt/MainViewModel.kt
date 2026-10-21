@@ -58,11 +58,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val irTransmitter = IrTransmitter(app)
     private val irRepository = IrProfileRepository(app)
 
+    private val lgDriver = LgWebOsDriver(app)
     private val registry = DriverRegistry(listOf(
         RokuDriver(),
         SamsungDriver(app),
-        LgWebOsDriver(app)
+        lgDriver
     ))
+    private var lastPointerMoveAt = 0L
+
 
     private val initialProfiles = runCatching { irRepository.cached() }.getOrDefault(emptyList())
     private val selectionPrefs =
@@ -219,32 +222,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    // Loading a code set is NOT proof it controls the whole TV.
+    // The user must verify individual navigation/volume commands before saving.
     fun testIrEntry(entry: IrCatalogEntry) {
         if (_state.value.isTestingIr) return
-        if (!_state.value.irAvailable) {
-            _state.value = _state.value.copy(irTestMessage = "На телефоне нет ИК-передатчика")
-            return
-        }
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 irTrialProfile = null, isTestingIr = true,
-                irTestMessage = "Загружаем код…"
+                irTestMessage = "Загружаем код-набор…"
             )
             val result = withContext(Dispatchers.IO) { irRepository.fetchIrdbProfile(entry) }
             if (result.isFailure) {
                 _state.value = _state.value.copy(
                     isTestingIr = false,
-                    irTestMessage = "Код не поддерживается: " + (result.exceptionOrNull()?.message ?: "ошибка")
+                    irTestMessage = "Код не поддерживается: " +
+                        (result.exceptionOrNull()?.message ?: "ошибка")
                 )
                 return@launch
             }
             val profile = result.getOrThrow()
-            val sent = irTransmitter.send(profile, RemoteCommand.POWER)
+            val required = setOf(RemoteCommand.UP, RemoteCommand.DOWN,
+                RemoteCommand.LEFT, RemoteCommand.RIGHT,
+                RemoteCommand.OK, RemoteCommand.VOLUME_UP)
+            val missing = required.filterNot { profile.commands.containsKey(it) }
             _state.value = _state.value.copy(
                 isTestingIr = false,
-                irTrialProfile = if (sent.isSuccess) profile else null,
-                irTestMessage = if (sent.isSuccess) "Команда отправлена. Телевизор среагировал?"
-                    else "Не удалось отправить POWER: " + (sent.exceptionOrNull()?.message ?: "ошибка")
+                irTrialProfile = profile,
+                irTestMessage = if (missing.isEmpty()) {
+                    "Код загружен. Проверьте кнопки по очереди на телевизоре."
+                } else {
+                    "Этот код неполный: отсутствует " + missing.size +
+                        " основных команд. Рекомендуем следующий код."
+                }
             )
         }
     }
@@ -319,6 +328,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 connectionMessage = if (result.isSuccess) "Wi‑Fi подключено" else (result.exceptionOrNull()?.message ?: "Ошибка подключения")
             )
         }
+    }
+
+    fun movePointer(dx: Float, dy: Float) {
+        val device = _state.value.selected ?: return
+        if (_state.value.mode != ControlMode.WIFI ||
+            device.driverId != "lg.webos" || !device.isOnline) return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastPointerMoveAt < 30L) return
+        lastPointerMoveAt = now
+        val moveX = (dx * 1.7f).toInt()
+        val moveY = (dy * 1.7f).toInt()
+        if (moveX == 0 && moveY == 0) return
+        viewModelScope.launch {
+            val result = lgDriver.movePointer(device, moveX, moveY)
+            if (result.isFailure) {
+                _state.value = _state.value.copy(
+                    connectionMessage = "Тачпад: " +
+                        (result.exceptionOrNull()?.localizedMessage ?: "нет соединения")
+                )
+            }
+        }
+    }
+
+    fun clickPointer() {
+        val device = _state.value.selected ?: return
+        if (device.driverId != "lg.webos" || !device.isOnline) return
+        viewModelScope.launch { lgDriver.clickPointer(device) }
+    }
+
+    fun scrollPointer(amount: Float) {
+        val device = _state.value.selected ?: return
+        if (device.driverId != "lg.webos" || !device.isOnline) return
+        viewModelScope.launch { lgDriver.scrollPointer(device, 0, amount.toInt()) }
     }
 
     fun send(command: RemoteCommand) {
