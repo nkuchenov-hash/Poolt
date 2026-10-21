@@ -280,12 +280,17 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
 
             Spacer(Modifier.height(18.dp))
             NumberPad(send)
+            if (state.mode == ControlMode.WIFI && state.selected?.driverId == "lg.webos") {
+                Spacer(Modifier.height(22.dp))
+                LgTouchpad(state, vm)
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
 
     if (state.showDevicePicker) {
         ModalBottomSheet(
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             onDismissRequest = vm::closePicker,
             containerColor = Panel,
             contentColor = Color.White
