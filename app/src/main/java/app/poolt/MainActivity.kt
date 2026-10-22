@@ -5,6 +5,9 @@ import android.graphics.Color as AndroidColor
 import android.graphics.Rect
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.Color as AColor
 import android.animation.ValueAnimator
 import android.view.Gravity
@@ -58,7 +61,11 @@ class MainActivity : ComponentActivity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(AndroidColor.BLACK) }
 
-        val artwork = BitmapFactory.decodeResource(resources, R.drawable.poolt_splash)
+        // Keep the approved sunset artwork and its existing remote illustration.
+        // Draw only the localized brand word on a separate bitmap; the app's
+        // internal package, user data and Wi-Fi pairing identity stay unchanged.
+        val originalArtwork = BitmapFactory.decodeResource(resources, R.drawable.poolt_splash)
+        val artwork = createBrandedSplash(originalArtwork, getString(R.string.app_name))
         val splash = ImageView(this).apply {
             setImageBitmap(artwork)
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -91,12 +98,52 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
     }
 
+    /**
+     * Rebrand the wordmark without touching the TV, remote, red logo or layout.
+     * The old white word is on an almost-black uniform strip below the logo.
+     * Interpolate its background horizontally before painting the new name.
+     */
+    private fun createBrandedSplash(original: Bitmap, title: String): Bitmap {
+        val result = original.copy(Bitmap.Config.ARGB_8888, true)
+        val width = result.width
+        val height = result.height
+        val left = (width * 0.285f).toInt()
+        val right = (width * 0.72f).toInt()
+        val top = (height * 0.814f).toInt()
+        val bottom = (height * 0.883f).toInt()
+        for (y in top until bottom) {
+            val leftPixel = original.getPixel((left - 12).coerceAtLeast(0), y)
+            val rightPixel = original.getPixel((right + 12).coerceAtMost(width - 1), y)
+            for (x in left until right) {
+                val t = (x - left).toFloat() / (right - left).coerceAtLeast(1)
+                fun mix(a: Int, b: Int) = (a * (1f - t) + b * t).toInt().coerceIn(0, 255)
+                result.setPixel(x, y, AndroidColor.rgb(
+                    mix(AndroidColor.red(leftPixel), AndroidColor.red(rightPixel)),
+                    mix(AndroidColor.green(leftPixel), AndroidColor.green(rightPixel)),
+                    mix(AndroidColor.blue(leftPixel), AndroidColor.blue(rightPixel))
+                ))
+            }
+        }
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+            color = AndroidColor.WHITE
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            textSize = width * 0.089f
+        }
+        val maxWordWidth = width * 0.82f
+        val actualWidth = paint.measureText(title)
+        if (actualWidth > maxWordWidth) paint.textSize *= maxWordWidth / actualWidth
+        Canvas(result).drawText(title, width / 2f, height * 0.867f, paint)
+        return result
+    }
+
     private fun makeWordFill(artwork: Bitmap): Bitmap {
         val result = Bitmap.createBitmap(artwork.width, artwork.height, Bitmap.Config.ARGB_8888)
-        val x0 = (artwork.width * 300f / 864f).toInt()
-        val y0 = (artwork.height * 1250f / 1536f).toInt()
-        val right = (artwork.width * 580f / 864f).toInt().coerceAtMost(artwork.width)
-        val bottom = (artwork.height * 1350f / 1536f).toInt().coerceAtMost(artwork.height)
+        val x0 = (artwork.width * 0.085f).toInt()
+        val y0 = (artwork.height * 0.809f).toInt()
+        val right = (artwork.width * 0.915f).toInt().coerceAtMost(artwork.width)
+        val bottom = (artwork.height * 0.887f).toInt().coerceAtMost(artwork.height)
         val w = right - x0
         val h = bottom - y0
         if (w <= 0 || h <= 0) return result
@@ -106,8 +153,8 @@ class MainActivity : ComponentActivity() {
         for (i in original.indices) {
             val c = original[i]
             val brightness = minOf(AColor.red(c), AColor.green(c), AColor.blue(c))
-            val alpha = ((brightness - 30).coerceIn(0, 160) * 255 / 160)
-            coloured[i] = AColor.argb(alpha, 232, 64, 75)
+            val alpha = ((brightness - 45).coerceIn(0, 180) * 255 / 180)
+            coloured[i] = AColor.argb(alpha, 230, 38, 62)
         }
         result.setPixels(coloured, 0, w, x0, y0, w, h)
         return result
@@ -180,7 +227,7 @@ fun PooltApp(vm: MainViewModel = viewModel()) {
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Poolt", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                            Text(androidx.compose.ui.res.stringResource(R.string.app_name), fontWeight = FontWeight.Bold, fontSize = 22.sp)
                             Spacer(Modifier.width(6.dp))
                             Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Muted)
                         }

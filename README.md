@@ -1,6 +1,6 @@
-# Poolt
+# Pooltophone / Пультофон
 
-Universal remote control for TVs and other devices.
+Universal remote control for TVs and other devices. Android package `app.poolt` is intentionally unchanged from Poolt so existing installs, settings and device pairing continue working.
 
 Current code ownership: `docs/ARCHITECTURE.md`; AI development rules: `AGENTS.md`; dated source/document review: `docs/DOCUMENTATION_PARITY_2026-10-17.md`. These notes do **not** certify protocol compatibility without device testing.
 
