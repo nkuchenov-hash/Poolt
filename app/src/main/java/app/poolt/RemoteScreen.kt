@@ -162,10 +162,12 @@ fun RemoteScreen(vm: MainViewModel) {
 
                 Spacer(Modifier.height(20.dp))
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    val rockerWidth = 59.dp
-                    val gap = 7.dp
+                    // Fit even narrow Android screens: no cropped channel/volume rockers.
+                    val compact = maxWidth < 320.dp
+                    val rockerWidth = if (compact) 48.dp else 59.dp
+                    val gap = if (compact) 5.dp else 7.dp
                     val dialSize = (maxWidth - rockerWidth * 2 - gap * 2)
-                        .coerceIn(170.dp, 235.dp)
+                        .coerceAtMost(235.dp)
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
