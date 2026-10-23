@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -32,9 +33,9 @@ fun LgTouchpad(state: MainUiState, vm: MainViewModel) {
             Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Mouse, null, tint = Color(0xFFE6263E))
+            Icon(Icons.Default.Mouse, null, tint = Color(0xFFF3334D))
             Spacer(Modifier.width(10.dp))
-            Text("Тачпад LG", fontWeight = FontWeight.SemiBold, fontSize = 17.sp,
+            Text("ТАЧПАД LG", fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
                 modifier = Modifier.weight(1f))
             Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 "Свернуть", tint = Color(0xFFB5B5BC))
@@ -73,10 +74,20 @@ fun LgTouchpad(state: MainUiState, vm: MainViewModel) {
                     Spacer(Modifier.height(12.dp))
                 }
                 Box(
-                    Modifier.fillMaxWidth().height(180.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFF222228))
-                        .border(1.dp, Color(0xFF44444C), RoundedCornerShape(18.dp))
+                    Modifier.fillMaxWidth().height(178.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF21171D), Color(0xFF131217), Color(0xFF171318))
+                            )
+                        )
+                        .border(
+                            1.dp,
+                            Brush.linearGradient(
+                                listOf(Color(0xFFF02A45), Color(0xFF8C2637), Color(0xFFEB3147))
+                            ),
+                            RoundedCornerShape(20.dp)
+                        )
                         .pointerInput(state.selected?.id) {
                             detectDragGestures { change, delta ->
                                 change.consume()
@@ -95,8 +106,8 @@ fun LgTouchpad(state: MainUiState, vm: MainViewModel) {
                         Icon(Icons.Default.TouchApp, null, Modifier.size(32.dp),
                             tint = Color(0xFF85858D))
                         Spacer(Modifier.height(12.dp))
-                        Text("Двигайте пальцем · касание — выбор",
-                            color = Color(0xFFDADADD), fontSize = 16.sp)
+                        Text("Водите пальцем · касание — выбор",
+                            color = Color(0xFFBBB8BE), fontSize = 15.sp)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
