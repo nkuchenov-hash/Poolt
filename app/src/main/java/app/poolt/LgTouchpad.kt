@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun LgTouchpad(state: MainUiState, vm: MainViewModel) {
-    var expanded by rememberSaveable { mutableStateOf(true) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
     val view = LocalView.current
     Column(Modifier.fillMaxWidth()) {
         Row(
