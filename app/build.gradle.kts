@@ -4,6 +4,12 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Signing material lives only in GitHub Actions Secrets (never in this repository).
+val permanentKeystore = System.getenv("POOLTOPHONE_SIGNING_KEYSTORE")
+val permanentStorePassword = System.getenv("POOLTOPHONE_SIGNING_STORE_PASSWORD")
+val permanentKeyPassword = System.getenv("POOLTOPHONE_SIGNING_KEY_PASSWORD")
+val permanentKeyAlias = System.getenv("POOLTOPHONE_SIGNING_KEY_ALIAS")
+
 android {
     namespace = "app.poolt"
     compileSdk = 35
@@ -11,8 +17,27 @@ android {
         applicationId = "app.poolt"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.18.0"
+        versionCode = 19
+        versionName = "0.18.1"
+    }
+    signingConfigs {
+        if (!permanentKeystore.isNullOrBlank()) {
+            create("pooltPermanent") {
+                storeFile = file(permanentKeystore)
+                storeType = "pkcs12"
+                storePassword = permanentStorePassword
+                keyPassword = permanentKeyPassword
+                keyAlias = permanentKeyAlias
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (!permanentKeystore.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("pooltPermanent")
+            }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
