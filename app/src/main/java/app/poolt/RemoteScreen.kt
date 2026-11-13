@@ -69,111 +69,64 @@ fun RemoteScreen(vm: MainViewModel) {
     Scaffold(
         containerColor = ScreenBg,
         topBar = {
-            Column(
-                Modifier.fillMaxWidth().background(ScreenBg).statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 7.dp)
+            Row(
+                Modifier.fillMaxWidth()
+                    .background(ScreenBg)
+                    .statusBarsPadding()
+                    .height(60.dp)
+                    .padding(start = 17.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    Modifier.weight(1f)
+                        .clip(RoundedCornerShape(11.dp))
+                        .clickable { feedback(); vm.openPicker() }
+                        .padding(vertical = 5.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        stringResource(R.string.app_name),
-                        color = White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                        "Пультофон", fontSize = 16.sp, color = White,
+                        fontWeight = FontWeight.SemiBold, maxLines = 1
                     )
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { feedback(); showAppSettings = true }, modifier = Modifier.size(42.dp)) {
-                        Icon(Icons.Default.Settings, "Настройки приложения", tint = SoftText)
-                    }
-                }
-                Spacer(Modifier.height(5.dp))
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 58.dp),
-                    horizontalArrangement = Arrangement.spacedBy(9.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        Modifier.weight(1f)
-                            .clip(RoundedCornerShape(17.dp))
-                            .background(Color(0xFF1C2028))
-                            .border(1.dp, Color(0xFF363C48), RoundedCornerShape(17.dp))
-                            .clickable { feedback(); vm.openPicker() }
-                            .padding(horizontal = 13.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Tv, null, Modifier.size(21.dp), tint = SoftText)
-                        Spacer(Modifier.width(10.dp))
-                        val ready = when (state.mode) {
-                            ControlMode.IR -> state.irAvailable && state.irVerified && state.selectedIrProfile != null
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val connected = when (state.mode) {
+                            ControlMode.IR -> state.irVerified && state.selectedIrProfile != null && state.irAvailable
                             ControlMode.WIFI -> state.selected?.isOnline == true
                         }
-                        Column(Modifier.weight(1f)) {
-                            val selectedName = when (state.mode) {
-                                ControlMode.IR -> state.selectedIrProfile?.let { "${it.brand} · ИК" }
-                                ControlMode.WIFI -> state.selected?.let { device ->
-                                    device.brand?.let { brand ->
-                                        if (device.name.startsWith(brand, true)) device.name else "$brand · ${device.name}"
-                                    } ?: device.name
-                                }
-                            } ?: "Выбрать телевизор"
-                            Text(selectedName, color = White, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(3.dp))
-                            Text(
-                                when {
-                                    ready -> if (state.mode == ControlMode.WIFI) "Подключено по Wi-Fi" else "ИК-пульт проверен"
-                                    state.isPairing -> "Подключаем…"
-                                    state.selected != null && state.mode == ControlMode.WIFI -> "Не подключён · нажми для выбора"
-                                    state.selectedIrProfile != null && state.mode == ControlMode.IR -> "ИК-пульт не проверен"
-                                    else -> "Нажми, чтобы выбрать устройство"
-                                },
-                                color = if (ready) Green else SoftText,
-                                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Icon(Icons.Default.ExpandMore, null, Modifier.size(23.dp), tint = SoftText)
-                    }
-                    Box(
-                        Modifier.size(51.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF1C2028))
-                            .border(1.dp, Color(0xFF363C48), RoundedCornerShape(16.dp))
-                            .clickable { feedback(); vm.openPicker() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Add, "Добавить устройство", Modifier.size(25.dp), tint = White)
+                        Box(
+                            Modifier.size(7.dp).clip(CircleShape)
+                                .background(if (connected) Green else Color(0xFF686C77))
+                        )
+                        Spacer(Modifier.width(7.dp))
+                        val name = when (state.mode) {
+                            ControlMode.IR -> state.selectedIrProfile?.let { "${it.brand} · ИК" }
+                            ControlMode.WIFI -> state.selected?.let {
+                                it.brand?.let { brand -> if (it.name.startsWith(brand, true)) it.name else brand + " · " + it.name }
+                                    ?: it.name
+                            }
+                        } ?: "Выбрать телевизор"
+                        Text(
+                            name, color = SoftText, fontSize = 13.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(Icons.Default.KeyboardArrowDown, "Выбрать телевизор",
+                            Modifier.size(16.dp), tint = SoftText)
                     }
                 }
-                if (state.savedWifiDevices.size + state.savedIrProfileIds.size > 1) {
-                    Spacer(Modifier.height(7.dp))
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
-                    ) {
-                        state.savedWifiDevices.forEach { device ->
-                            val active = state.mode == ControlMode.WIFI &&
-                                state.selected?.driverId == device.driverId &&
-                                state.selected?.address == device.address
-                            Text(
-                                device.brand ?: device.name,
-                                modifier = Modifier.clip(RoundedCornerShape(14.dp))
-                                    .background(if (active) Color(0xFF40343F) else Color(0xFF1B1D24))
-                                    .clickable { feedback(); vm.selectDevice(device) }
-                                    .padding(horizontal = 13.dp, vertical = 8.dp),
-                                color = if (active) White else SoftText, fontSize = 12.sp
-                            )
-                        }
-                        state.irProfiles.filter { it.id in state.savedIrProfileIds }.forEach { profile ->
-                            Text(
-                                "${profile.brand} · ИК",
-                                modifier = Modifier.clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0xFF1B1D24))
-                                    .clickable { feedback(); vm.selectSavedIrProfile(profile) }
-                                    .padding(horizontal = 13.dp, vertical = 8.dp),
-                                color = SoftText, fontSize = 12.sp
-                            )
-                        }
-                    }
+                IconButton(
+                    onClick = { feedback(); vm.openPicker() },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(Icons.Default.Add, "Добавить телевизор",
+                        Modifier.size(23.dp), tint = White)
+                }
+                IconButton(
+                    onClick = { feedback(); showAppSettings = true },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(Icons.Default.Settings, "Настройки",
+                        Modifier.size(22.dp), tint = SoftText)
                 }
             }
         }
@@ -222,10 +175,20 @@ fun RemoteScreen(vm: MainViewModel) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (useTouchpad) {
-                            if (pointerAvailable) LgTouchpadSurface(state, vm, dialSize)
-                            else SwipeNavigationPad(dialSize, send)
+                            val padWidth = maxWidth.coerceAtMost(420.dp)
+                            val padHeight = padWidth * 0.67f
+                            if (pointerAvailable) {
+                                LgTouchpadSurface(state, vm, padWidth, padHeight)
+                            } else {
+                                SwipeNavigationPad(
+                                    width = padWidth,
+                                    height = padHeight,
+                                    onMove = { command -> vm.send(command) },
+                                    onTap = { send(RemoteCommand.OK) }
+                                )
+                            }
                         } else {
-                            CompassPad(dialSize, send)
+                            PhysicalCompassPad(dialSize, send)
                         }
 
                         Spacer(Modifier.height(13.dp))
@@ -394,37 +357,46 @@ private fun RemoteRoundKey(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val shape = CircleShape
-    val colors = if (isPower) {
-        listOf(Color(0xFFF34457), Color(0xFFC61E38))
-    } else if (pressed) {
-        listOf(Color(0xFF32323A), Color(0xFF1D1D23))
-    } else {
-        listOf(Color(0xFF2B2C31), Color(0xFF17181C))
+    val press by animateFloatAsState(
+        targetValue = if (pressed) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            stiffness = androidx.compose.animation.core.Spring.StiffnessHigh
+        ),
+        label = "round-physical-press"
+    )
+    val colors = when {
+        isPower && pressed -> listOf(Color(0xFF9E1E32), Color(0xFFDA354C))
+        isPower -> listOf(Color(0xFFF54A60), Color(0xFFB91C37))
+        pressed -> listOf(Color(0xFF11151C), Color(0xFF373D47))
+        else -> listOf(Color(0xFF323844), Color(0xFF1A1D25))
     }
     Box(
         Modifier.size(diameter)
-            .shadow(if (isPower) 8.dp else 4.dp, shape, false,
-                ambientColor = if (isPower) Red.copy(alpha = 0.26f) else Color.Black,
-                spotColor = if (isPower) Red.copy(alpha = 0.3f) else Color.Black)
-            .clip(shape)
+            .graphicsLayer {
+                scaleX = 1f - press * .06f
+                scaleY = 1f - press * .07f
+                translationY = press * 3.dp.toPx()
+            }
+            .shadow(
+                if (pressed) 1.dp else 7.dp,
+                CircleShape, false,
+                ambientColor = Color(0x80000000),
+                spotColor = Color.Black
+            )
+            .clip(CircleShape)
             .background(Brush.verticalGradient(colors))
             .border(
-                1.dp,
-                if (isPower) Color(0xFFFF6270) else Color(0xFF3F4147),
-                shape
+                1.2.dp,
+                if (isPower) Color(0xFFEF6B7E)
+                else if (pressed) Color(0xFF313944)
+                else Color(0xFF525865),
+                CircleShape
             )
-            .graphicsLayer {
-                scaleX = if (pressed) 0.93f else 1f
-                scaleY = if (pressed) 0.93f else 1f
-            }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick
-            ),
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
-    ) { Icon(icon, contentDescription, tint = White, modifier = Modifier.size(24.dp)) }
+    ) {
+        Icon(icon, contentDescription, tint = White, modifier = Modifier.size(25.dp))
+    }
 }
 
 @Composable
@@ -434,21 +406,39 @@ private fun CompactActionKey(
     modifier: Modifier,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(19.dp)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val depth by animateFloatAsState(
+        targetValue = if (pressed) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            stiffness = androidx.compose.animation.core.Spring.StiffnessHigh
+        ),
+        label = "small-physical-press"
+    )
+    val shape = RoundedCornerShape(20.dp)
     Column(
         modifier.height(79.dp)
+            .graphicsLayer {
+                scaleX = 1f - depth * .045f
+                scaleY = 1f - depth * .065f
+                translationY = depth * 3.dp.toPx()
+            }
+            .shadow(if (pressed) 1.dp else 5.dp, shape)
             .clip(shape)
             .background(
-                Brush.verticalGradient(listOf(Color(0xFF252A34), Color(0xFF191C25)))
+                Brush.verticalGradient(
+                    if (pressed) listOf(Color(0xFF151920), Color(0xFF343B47))
+                    else listOf(Color(0xFF303744), Color(0xFF171C26))
+                )
             )
-            .border(1.dp, Color(0xFF343944), shape)
-            .livePress(onClick),
+            .border(1.dp, if (pressed) Color(0xFF2D3542) else Color(0xFF4C5361), shape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(icon, title, Modifier.size(23.dp), tint = White)
-        Spacer(Modifier.height(4.dp))
-        Text(title, fontSize = 11.sp, color = SoftText, maxLines = 1)
+        Icon(icon, title, Modifier.size(25.dp), tint = White)
+        Spacer(Modifier.height(6.dp))
+        Text(title, fontSize = 12.sp, color = SoftText, maxLines = 1)
     }
 }
 
@@ -464,107 +454,53 @@ private fun NeonRocker(
     val shape = RoundedCornerShape(25.dp)
     Column(
         modifier.height(166.dp)
+            .shadow(5.dp, shape)
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(Color(0xFF242934), Color(0xFF151922))))
-            .border(1.dp, Color(0xFF3E4350), shape),
+            .background(Brush.verticalGradient(listOf(Color(0xFF2B323F), Color(0xFF151A23))))
+            .border(1.dp, Color(0xFF4A515F), shape),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(
-            Modifier.fillMaxWidth().height(72.dp).livePress(onTop),
-            contentAlignment = Alignment.Center
-        ) { Icon(topIcon, title + " up", Modifier.size(27.dp), tint = White) }
+        RockerHalf(
+            icon = topIcon,
+            title = "$title +",
+            onClick = onTop
+        )
         Text(
-            title, color = SoftText, fontSize = 11.sp,
+            title, color = Color(0xFFD3D8E1), fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold, maxLines = 1
         )
-        Box(
-            Modifier.fillMaxWidth().height(72.dp).livePress(onBottom),
-            contentAlignment = Alignment.Center
-        ) { Icon(bottomIcon, title + " down", Modifier.size(27.dp), tint = White) }
+        RockerHalf(
+            icon = bottomIcon,
+            title = "$title −",
+            onClick = onBottom
+        )
     }
 }
 
 @Composable
-private fun CompassPad(
-    diameter: Dp,
-    send: (RemoteCommand) -> Unit
-) {
+private fun RockerHalf(icon: ImageVector, title: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val depth by animateFloatAsState(
+        targetValue = if (pressed) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            stiffness = androidx.compose.animation.core.Spring.StiffnessHigh
+        ),
+        label = "rocker-half-press"
+    )
     Box(
-        Modifier.size(diameter)
-            .shadow(8.dp, CircleShape, clip = false,
-                ambientColor = Color(0xFF4A1625), spotColor = Color(0xFF451321))
-            .clip(CircleShape)
-            .background(
-                Brush.radialGradient(
-                    listOf(Color(0xFF2B2C32), Color(0xFF19191E), Color(0xFF111216))
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.sweepGradient(
-                    listOf(
-                        Color(0xFF853644),
-                        Color(0xFF393940),
-                        Color(0xFF5C2432),
-                        Color(0xFF393940),
-                        Color(0xFF853644)
-                    )
-                ),
-                shape = CircleShape
-            )
-    ) {
-        val directionSize = (diameter * 0.34f).coerceAtLeast(54.dp)
-        CompassKey(
-            Icons.Default.KeyboardArrowUp,
-            "Вверх",
-            Modifier.align(Alignment.TopCenter).size(directionSize)
-        ) { send(RemoteCommand.UP) }
-        CompassKey(
-            Icons.Default.KeyboardArrowDown,
-            "Вниз",
-            Modifier.align(Alignment.BottomCenter).size(directionSize)
-        ) { send(RemoteCommand.DOWN) }
-        CompassKey(
-            Icons.Default.KeyboardArrowLeft,
-            "Влево",
-            Modifier.align(Alignment.CenterStart).size(directionSize)
-        ) { send(RemoteCommand.LEFT) }
-        CompassKey(
-            Icons.Default.KeyboardArrowRight,
-            "Вправо",
-            Modifier.align(Alignment.CenterEnd).size(directionSize)
-        ) { send(RemoteCommand.RIGHT) }
-        Box(
-            Modifier.align(Alignment.Center)
-                .size((diameter * 0.41f).coerceAtLeast(74.dp))
-                .clip(CircleShape)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF25262C), Color(0xFF0B0C10))
-                    )
-                )
-                .border(1.dp, Color(0xFF5B3540), CircleShape)
-                .livePress { send(RemoteCommand.OK) },
-            contentAlignment = Alignment.Center
-        ) {
-            Text("OK", color = White, fontWeight = FontWeight.SemiBold, fontSize = 19.sp)
-        }
-    }
-}
-
-@Composable
-private fun CompassKey(
-    icon: ImageVector,
-    label: String,
-    modifier: Modifier,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier.clip(CircleShape).livePress(onClick),
+        Modifier.fillMaxWidth().height(70.dp)
+            .graphicsLayer {
+                scaleX = 1f - .04f * depth
+                scaleY = 1f - .045f * depth
+                translationY = 2.dp.toPx() * depth
+            }
+            .background(if (pressed) Color(0xFF161B24) else Color.Transparent)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, label, tint = White, modifier = Modifier.size(30.dp))
+        Icon(icon, title, tint = White, modifier = Modifier.size(30.dp))
     }
 }
 
@@ -644,13 +580,16 @@ private fun RectKey(label: String, modifier: Modifier, onClick: () -> Unit) {
 private fun Modifier.livePress(onClick: () -> Unit): Modifier {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.93f else 1f,
-        label = "remote-key-press"
+    val depth by animateFloatAsState(
+        targetValue = if (pressed) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            stiffness = androidx.compose.animation.core.Spring.StiffnessHigh
+        ),
+        label = "remote-key-depth"
     )
     return this.graphicsLayer {
-        scaleX = scale
-        scaleY = scale
-        alpha = if (pressed) 0.78f else 1f
+        scaleX = 1f - depth * .05f
+        scaleY = 1f - depth * .065f
+        translationY = depth * 2.8.dp.toPx()
     }.clickable(interactionSource = interaction, indication = null, onClick = onClick)
 }
