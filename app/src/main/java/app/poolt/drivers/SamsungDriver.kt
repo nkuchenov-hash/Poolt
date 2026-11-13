@@ -23,12 +23,55 @@ class SamsungDriver(private val context: Context) : DeviceDriver {
 
     override suspend fun discover(): List<Device> = SsdpDiscovery.discover().filter { it.driverId == id }
     override suspend fun pair(device: Device): Result<Unit> = connect(device, null)
+
+    // Samsung remote IME accepts UTF-8 text as base64 when a TV input has focus.
+    suspend fun insertText(device: Device, text: String): Result<Unit> {
+        if (text.isBlank()) return Result.failure(IllegalArgumentException("Введите текст"))
+        return connect(device, null, text)
+    }
+    suspend fun submitText(device: Device): Result<Unit> = connect(device, "KEY_ENTER")
+    suspend fun deleteText(device: Device): Result<Unit> = connect(device, "KEY_BACKSPACE")
+
+    private var imeMonitor: WebSocket? = null
+    fun stopKeyboardMonitor() {
+        imeMonitor?.close(1000, "switch TV")
+        imeMonitor = null
+    }
+
+    fun watchKeyboard(device: Device, onFocus: (Boolean) -> Unit) {
+        stopKeyboardMonitor()
+        val ip = device.address ?: return
+        val name = Base64.encodeToString("Poolt".toByteArray(), Base64.NO_WRAP)
+        val token = prefs.getString(ip, null)
+        val url = "wss://$ip:8002/api/v2/channels/samsung.remote.control?name=$name" +
+            (token?.let { "&token=$it" } ?: "")
+        imeMonitor = client.newWebSocket(Request.Builder().url(url).build(),
+            object : WebSocketListener() {
+                override fun onMessage(ws: WebSocket, text: String) {
+                    val data = runCatching { JSONObject(text) }.getOrNull() ?: return
+                    when (data.optString("event")) {
+                        "ms.remote.imeStart", "ms.remote.imeUpdate" -> onFocus(true)
+                        "ms.remote.imeDone", "ms.remote.imeEnd" -> onFocus(false)
+                        "ms.channel.connect" -> {
+                            data.optJSONObject("data")?.optString("token")
+                                ?.takeIf { it.isNotBlank() }
+                                ?.let { prefs.edit().putString(ip, it).apply() }
+                        }
+                    }
+                }
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    onFocus(false)
+                }
+            }
+        )
+    }
+
     override suspend fun send(device: Device, command: RemoteCommand): Result<Unit> {
         val key = keyFor(command) ?: return Result.failure(IllegalArgumentException("Команда не поддерживается Samsung"))
         return connect(device, key)
     }
 
-    private suspend fun connect(device: Device, key: String?): Result<Unit> = suspendCancellableCoroutine { cont ->
+    private suspend fun connect(device: Device, key: String?, textInput: String? = null): Result<Unit> = suspendCancellableCoroutine { cont ->
         val ip = device.address
         if (ip == null) {
             cont.resume(Result.failure(IllegalArgumentException("Не указан IP телевизора")))
@@ -52,15 +95,26 @@ class SamsungDriver(private val context: Context) : DeviceDriver {
                     "ms.channel.connect" -> {
                         val newToken = obj.optJSONObject("data")?.optString("token")
                         if (!newToken.isNullOrBlank()) prefs.edit().putString(ip, newToken).apply()
-                        if (key != null) {
-                            val payload = JSONObject()
-                                .put("method", "ms.remote.control")
-                                .put("params", JSONObject()
-                                    .put("Cmd", "Click")
+                        if (key != null || textInput != null) {
+                            val params = if (textInput != null) {
+                                JSONObject().put("Cmd",
+                                    Base64.encodeToString(textInput.toByteArray(Charsets.UTF_8), Base64.NO_WRAP))
+                                    .put("DataOfCmd", "base64")
+                                    .put("TypeOfRemote", "SendInputString")
+                            } else {
+                                JSONObject().put("Cmd", "Click")
                                     .put("DataOfCmd", key)
                                     .put("Option", "false")
-                                    .put("TypeOfRemote", "SendRemoteKey"))
-                            webSocket.send(payload.toString())
+                                    .put("TypeOfRemote", "SendRemoteKey")
+                            }
+                            val payload = JSONObject()
+                                .put("method", "ms.remote.control")
+                                .put("params", params)
+                            if (!webSocket.send(payload.toString())) {
+                                finish(Result.failure(IllegalStateException("Samsung не принял команду")))
+                                webSocket.close(1000, "send failure")
+                                return
+                            }
                         }
                         finish(Result.success(Unit))
                         webSocket.close(1000, "done")
