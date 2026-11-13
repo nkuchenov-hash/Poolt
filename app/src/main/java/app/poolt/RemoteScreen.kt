@@ -167,26 +167,12 @@ fun RemoteScreen(vm: MainViewModel) {
                         .padding(horizontal = 13.dp, vertical = 9.dp)
                 ) { Text("+ Добавить", fontSize = 13.sp, color = SoftText) }
             }
-            // One cohesive remote body. The very subtle red edge light is decorative
-            // and does not change the size or hit area of the controls.
+            // Controls float on the dark background, without an enclosing panel.
             Column(
                 Modifier.fillMaxWidth().heightIn(min = minimumRemoteHeight)
-                    .clip(RoundedCornerShape(27.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color(0xFF18151B), Color(0xFF101015), Color(0xFF0F1014))
-                        )
-                    )
-                    .border(
-                        width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            listOf(Color(0xFF803039), Color(0xFF303039), Color(0xFF501D2C))
-                        ),
-                        shape = RoundedCornerShape(27.dp)
-                    )
-                    .padding(horizontal = 12.dp, vertical = 17.dp),
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
+                verticalArrangement = Arrangement.SpaceEvenly
             ) {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -346,7 +332,7 @@ private fun NeonRocker(
             .background(Brush.verticalGradient(listOf(SurfaceTop, SurfaceBottom)))
             .border(
                 width = 1.dp,
-                color = Color(0xFF573039),
+                color = Color(0xFF42434B),
                 shape = RoundedCornerShape(26.dp)
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -451,48 +437,60 @@ private fun CompassKey(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MoreRemoteKeys(onCommand: (RemoteCommand) -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { expanded = !expanded }
-            .padding(vertical = 8.dp, horizontal = 8.dp),
+            .clip(RoundedCornerShape(14.dp))
+            .background(KeySurface)
+            .clickable { expanded = true }
+            .padding(vertical = 12.dp, horizontal = 15.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Default.Dialpad, null, tint = SoftText)
-        Spacer(Modifier.width(10.dp))
+        Icon(Icons.Default.Dialpad, "Открыть цифровую клавиатуру", tint = White)
+        Spacer(Modifier.width(12.dp))
         Text(
             "Цифры и медиакнопки",
-            color = Color(0xFFCACBD0), fontSize = 15.sp, modifier = Modifier.weight(1f)
+            color = White, fontSize = 15.sp, modifier = Modifier.weight(1f)
         )
-        Icon(
-            if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-            "Развернуть", tint = SoftText
-        )
+        Icon(Icons.Default.KeyboardArrowUp, "Показать снизу", tint = SoftText)
     }
     if (expanded) {
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            RectKey("◀◀", Modifier.weight(1f)) { onCommand(RemoteCommand.REWIND) }
-            RectKey("▶/Ⅱ", Modifier.weight(1f)) { onCommand(RemoteCommand.PLAY_PAUSE) }
-            RectKey("▶▶", Modifier.weight(1f)) { onCommand(RemoteCommand.FAST_FORWARD) }
-        }
-        Spacer(Modifier.height(12.dp))
-        val rows = listOf(
-            listOf("1" to RemoteCommand.NUMBER_1, "2" to RemoteCommand.NUMBER_2, "3" to RemoteCommand.NUMBER_3),
-            listOf("4" to RemoteCommand.NUMBER_4, "5" to RemoteCommand.NUMBER_5, "6" to RemoteCommand.NUMBER_6),
-            listOf("7" to RemoteCommand.NUMBER_7, "8" to RemoteCommand.NUMBER_8, "9" to RemoteCommand.NUMBER_9),
-            listOf("Гид" to RemoteCommand.GUIDE, "0" to RemoteCommand.NUMBER_0, "Инфо" to RemoteCommand.INFO)
-        )
-        rows.forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                row.forEach { (label, command) ->
-                    RectKey(label, Modifier.weight(1f)) { onCommand(command) }
+        ModalBottomSheet(
+            onDismissRequest = { expanded = false },
+            containerColor = Color(0xFF17171B),
+            contentColor = White
+        ) {
+            Column(
+                Modifier.fillMaxWidth().navigationBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Клавиатура пульта", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(15.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    RectKey("◀◀", Modifier.weight(1f)) { onCommand(RemoteCommand.REWIND) }
+                    RectKey("▶/Ⅱ", Modifier.weight(1f)) { onCommand(RemoteCommand.PLAY_PAUSE) }
+                    RectKey("▶▶", Modifier.weight(1f)) { onCommand(RemoteCommand.FAST_FORWARD) }
+                }
+                Spacer(Modifier.height(16.dp))
+                val rows = listOf(
+                    listOf("1" to RemoteCommand.NUMBER_1, "2" to RemoteCommand.NUMBER_2, "3" to RemoteCommand.NUMBER_3),
+                    listOf("4" to RemoteCommand.NUMBER_4, "5" to RemoteCommand.NUMBER_5, "6" to RemoteCommand.NUMBER_6),
+                    listOf("7" to RemoteCommand.NUMBER_7, "8" to RemoteCommand.NUMBER_8, "9" to RemoteCommand.NUMBER_9),
+                    listOf("Гид" to RemoteCommand.GUIDE, "0" to RemoteCommand.NUMBER_0, "Инфо" to RemoteCommand.INFO)
+                )
+                rows.forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                        row.forEach { (label, command) ->
+                            RectKey(label, Modifier.weight(1f)) { onCommand(command) }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }
