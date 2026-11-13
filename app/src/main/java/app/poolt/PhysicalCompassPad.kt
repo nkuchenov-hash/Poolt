@@ -40,26 +40,36 @@ import app.poolt.core.RemoteCommand
 import kotlin.math.cos
 import kotlin.math.sin
 
-private val Rim = Color(0xFF454B57)
+private val Rim = Color(0xFF763244)
 private val Light = Color(0xFFECEEF4)
 
 /**
  * Tactile wheel with four independent pressable sectors.
- * Dark mechanical depth replaces the red outline of the old wheel.
+ * Dark mechanical depth and restrained crimson accents form the signature wheel.
  * The center OK stays a separate button and the hit zones never overlap.
  */
 @Composable
 fun PhysicalCompassPad(diameter: Dp, onCommand: (RemoteCommand) -> Unit) {
     Box(
         Modifier.size(diameter)
-            .shadow(11.dp, CircleShape, ambientColor = Color(0x85000000), spotColor = Color.Black)
+            .shadow(13.dp, CircleShape, ambientColor = Color(0x85391425), spotColor = Color.Black)
             .clip(CircleShape)
             .background(
                 Brush.radialGradient(
-                    listOf(Color(0xFF313743), Color(0xFF252B35), Color(0xFF131720))
+                    listOf(Color(0xFF332A35), Color(0xFF27232D), Color(0xFF14151D))
                 )
             )
-            .border(1.2.dp, Rim, CircleShape)
+            .border(
+                1.6.dp,
+                Brush.sweepGradient(
+                    listOf(
+                        Color(0xFF9E3550), Color(0xFF49414E),
+                        Color(0xFFC7435F), Color(0xFF514351),
+                        Color(0xFF9E3550)
+                    )
+                ),
+                CircleShape
+            )
     ) {
         Canvas(Modifier.matchParentSize()) {
             val rad = size.minDimension / 2f
@@ -72,9 +82,9 @@ fun PhysicalCompassPad(diameter: Dp, onCommand: (RemoteCommand) -> Unit) {
                 ),
                 radius = rad
             )
-            drawCircle(Color(0xFF59606B).copy(alpha = .35f),
+            drawCircle(Color(0xFFD04E65).copy(alpha = .28f),
                 radius = rad - 3.dp.toPx(), style = Stroke(width = 1.dp.toPx()))
-            drawCircle(Color(0xFF090B10).copy(alpha = .8f),
+            drawCircle(Color(0xFF461F2C).copy(alpha = .9f),
                 radius = rad * .60f, style = Stroke(width = 1.5.dp.toPx()))
             for (degrees in listOf(45.0, 135.0, 225.0, 315.0)) {
                 val r = degrees * Math.PI / 180.0
@@ -146,7 +156,7 @@ fun PhysicalCompassPad(diameter: Dp, onCommand: (RemoteCommand) -> Unit) {
                 )
                 .border(
                     1.5.dp,
-                    if (pressed) Color(0xFF2E3540) else Color(0xFF69707C),
+                    if (pressed) Color(0xFFF45573) else Color(0xFF9B4B5E),
                     CircleShape
                 )
                 .clickable(
@@ -188,7 +198,7 @@ private fun PhysicalDirection(
             .clip(CircleShape)
             .background(
                 if (pressed) Brush.radialGradient(
-                    listOf(Color(0xFF343D4B), Color(0x00252A34))
+                    listOf(Color(0xFF802D43), Color(0x00252A34))
                 ) else Brush.radialGradient(
                     listOf(Color(0x00242A34), Color(0x00242A34))
                 )
@@ -199,7 +209,7 @@ private fun PhysicalDirection(
         Icon(
             icon, contentDescription = label,
             modifier = Modifier.size(35.dp),
-            tint = if (pressed) Color.White else Light
+            tint = if (pressed) Color(0xFFFFB2C1) else Light
         )
     }
 }
