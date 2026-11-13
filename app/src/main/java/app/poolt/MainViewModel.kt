@@ -57,6 +57,7 @@ data class MainUiState(
     val pointerReady: Boolean = false,
     val pointerConfirmed: Boolean = false,
     val pointerStatus: String = "",
+    val hapticEnabled: Boolean = true,
     val showDevicePicker: Boolean = false,
     val manualIp: String = "",
     val connectionMessage: String = "",
@@ -82,6 +83,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(
         MainUiState(
+            hapticEnabled = selectionPrefs.getBoolean("haptic_enabled", true),
             savedWifiDevices = readSavedWifiDevices(),
             savedIrProfileIds = selectionPrefs.getStringSet("saved_ir_profiles", emptySet())?.toSet() ?: emptySet(),
             irAvailable = irTransmitter.hasEmitter,
@@ -174,6 +176,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(mode = ControlMode.IR, selectedIrProfile = profile,
             irVerified = true, showDevicePicker = false,
             connectionMessage = "Сохранённый ИК-пульт · ${profile.brand}")
+    }
+
+    fun setHapticEnabled(enabled: Boolean) {
+        selectionPrefs.edit().putBoolean("haptic_enabled", enabled).apply()
+        _state.value = _state.value.copy(hapticEnabled = enabled)
     }
 
     fun setMode(mode: ControlMode) {
