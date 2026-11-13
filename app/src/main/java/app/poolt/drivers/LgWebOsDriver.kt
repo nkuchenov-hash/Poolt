@@ -37,6 +37,127 @@ class LgWebOsDriver(private val context: Context) : DeviceDriver {
         return sendPointer(device, button)
     }
 
+
+    // LG webOS IME calls work only while a compatible TV text field is focused.
+    // Wait for the service reply instead of treating a queued websocket send as success.
+    suspend fun insertText(device: Device, text: String): Result<Unit> {
+        if (text.isBlank()) return Result.failure(IllegalArgumentException("Введите текст"))
+        return imeRequest(device, "insertText", JSONObject().put("text", text).put("replace", false))
+    }
+
+    suspend fun deleteText(device: Device): Result<Unit> =
+        imeRequest(device, "deleteCharacters", JSONObject().put("count", 1))
+
+    suspend fun submitText(device: Device): Result<Unit> =
+        imeRequest(device, "sendEnterKey", JSONObject())
+
+    private suspend fun imeRequest(
+        device: Device,
+        action: String,
+        payload: JSONObject
+    ): Result<Unit> = kotlinx.coroutines.withTimeoutOrNull(10000L) {
+        suspendCancellableCoroutine<Result<Unit>> { cont ->
+            val ip = device.address
+            if (ip.isNullOrBlank()) {
+                cont.resume(Result.failure(IllegalArgumentException("Неизвестен адрес LG")))
+                return@suspendCancellableCoroutine
+            }
+            val finished = AtomicBoolean(false)
+            val requestId = "poolt_ime_" + System.nanoTime()
+            val key = prefs.getString(ip, null)
+            var requestSent = false
+            val socket = client.newWebSocket(
+                Request.Builder().url("ws://$ip:3000").build(),
+                object : WebSocketListener() {
+                    private fun finish(result: Result<Unit>, ws: WebSocket) {
+                        if (finished.compareAndSet(false, true)) {
+                            if (cont.isActive) cont.resume(result)
+                            ws.close(1000, "IME complete")
+                        }
+                    }
+                    override fun onOpen(ws: WebSocket, response: Response) {
+                        ws.send(registerPayload(key).toString())
+                    }
+                    override fun onMessage(ws: WebSocket, text: String) {
+                        val data = runCatching { JSONObject(text) }.getOrNull() ?: return
+                        if (data.optString("type") == "registered" && !requestSent) {
+                            requestSent = true
+                            val newKey = data.optJSONObject("payload")?.optString("client-key")
+                            if (!newKey.isNullOrBlank()) prefs.edit().putString(ip, newKey).apply()
+                            ws.send(
+                                JSONObject()
+                                    .put("type", "request")
+                                    .put("id", requestId)
+                                    .put("uri", "ssap://com.webos.service.ime/$action")
+                                    .put("payload", payload).toString()
+                            )
+                        } else if (data.optString("id") == requestId) {
+                            if (data.optString("type") == "error" ||
+                                data.optJSONObject("payload")?.optBoolean("returnValue", true) == false) {
+                                finish(Result.failure(IllegalStateException(
+                                    data.optJSONObject("payload")?.optString("errorText")
+                                        ?: data.optString("error", "LG отклонил ввод")
+                                )), ws)
+                            } else {
+                                finish(Result.success(Unit), ws)
+                            }
+                        } else if (data.optString("type") == "error") {
+                            finish(Result.failure(IllegalStateException(data.optString("error"))), ws)
+                        }
+                    }
+                    override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                        finish(Result.failure(t), ws)
+                    }
+                }
+            )
+            cont.invokeOnCancellation { socket.cancel() }
+        }
+    } ?: Result.failure(IllegalStateException("LG не подтвердил ввод текста"))
+
+    // Subscribe while the device is selected. TV emits changes when a text
+    // field receives or loses focus, allowing phone keyboard to appear.
+    private var imeMonitor: WebSocket? = null
+    fun stopKeyboardMonitor() {
+        imeMonitor?.close(1000, "switch TV")
+        imeMonitor = null
+    }
+
+    fun watchKeyboard(device: Device, onFocus: (Boolean) -> Unit) {
+        stopKeyboardMonitor()
+        val ip = device.address ?: return
+        val key = prefs.getString(ip, null)
+        val socket = client.newWebSocket(
+            Request.Builder().url("ws://$ip:3000").build(),
+            object : WebSocketListener() {
+                override fun onOpen(ws: WebSocket, response: Response) {
+                    ws.send(registerPayload(key).toString())
+                }
+                override fun onMessage(ws: WebSocket, text: String) {
+                    val data = runCatching { JSONObject(text) }.getOrNull() ?: return
+                    if (data.optString("type") == "registered") {
+                        data.optJSONObject("payload")?.optString("client-key")
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { prefs.edit().putString(ip, it).apply() }
+                        ws.send(
+                            JSONObject().put("type", "subscribe")
+                                .put("id", "poolt_ime_watch")
+                                .put("uri", "ssap://com.webos.service.ime/registerRemoteKeyboard")
+                                .put("payload", JSONObject().put("subscribe", true)).toString()
+                        )
+                    } else if (data.optString("id") == "poolt_ime_watch") {
+                        val focus = data.optJSONObject("payload")
+                            ?.optJSONObject("currentWidget")?.optBoolean("focus", false)
+                        if (focus != null) onFocus(focus)
+                    }
+                }
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    onFocus(false)
+                }
+            }
+        )
+        imeMonitor = socket
+    }
+
     // Keep the pointer input socket alive between moves. Re-opening it for every
     // button caused sluggish response and made true Magic Remote behaviour impossible.
     private val pointerMutex = Mutex()
