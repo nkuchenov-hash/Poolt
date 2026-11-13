@@ -214,6 +214,7 @@ fun RemoteScreen(vm: MainViewModel) {
                     val gap = if (compact) 5.dp else 7.dp
                     val dialSize = (maxWidth - rockerWidth * 2 - gap * 2)
                         .coerceAtMost(235.dp)
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
@@ -306,6 +307,7 @@ fun RemoteScreen(vm: MainViewModel) {
                             )
                         }
                     }
+                    }
                 }
                 Spacer(Modifier.height(19.dp))
 
@@ -325,7 +327,7 @@ fun RemoteScreen(vm: MainViewModel) {
                     }
                 }
 
-                 Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(10.dp))
                 MoreRemoteKeys(send)
             }
             if (state.mode == ControlMode.WIFI &&
