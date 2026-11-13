@@ -170,12 +170,13 @@ fun RemoteScreen(vm: MainViewModel) {
 
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val dialSize = maxWidth.coerceAtMost(258.dp)
+                    val touchWidth = maxWidth.coerceAtMost(420.dp)
                     Column(
                         Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (useTouchpad) {
-                            val padWidth = maxWidth.coerceAtMost(420.dp)
+                            val padWidth = touchWidth
                             val padHeight = padWidth * 0.67f
                             if (pointerAvailable) {
                                 LgTouchpadSurface(state, vm, padWidth, padHeight)
