@@ -333,6 +333,43 @@ private fun WifiDevicePicker(state: MainUiState, vm: MainViewModel) {
     var manual by remember { mutableStateOf(false) }
     Text("Телефон и телевизор должны быть в одной сети Wi-Fi.", color = PickerMuted, fontSize = 16.sp)
     Spacer(Modifier.height(12.dp))
+    if (state.savedWifiDevices.isNotEmpty()) {
+        Text("Мои устройства", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        state.savedWifiDevices.forEach { device ->
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    .background(PickerTile, RoundedCornerShape(14.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    Modifier.weight(1f).clickable { vm.selectDevice(device) }
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Tv, null, tint = Color.White)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(device.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (state.selected?.address == device.address &&
+                                state.selected?.driverId == device.driverId &&
+                                state.selected?.isOnline == true) "Подключено · нажмите для выбора"
+                            else "Сохранено · нажмите для подключения",
+                            color = PickerMuted, fontSize = 12.sp
+                        )
+                    }
+                    Icon(Icons.Default.ChevronRight, null, tint = PickerMuted)
+                }
+                IconButton(onClick = { vm.forgetSavedDevice(device) }) {
+                    Icon(Icons.Default.DeleteOutline, "Удалить устройство", tint = PickerMuted)
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Text("Добавить новое", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+    }
     Button(
         onClick = vm::scan,
         enabled = !state.isScanning,
