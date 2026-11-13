@@ -1,4 +1,4 @@
-name: Android Debug APK
+name: Android internal debug and signing bootstrap
 
 on:
   push:
@@ -26,11 +26,27 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        run: gradle :app:assembleDebug :app:assembleRelease --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Poolt-debug
+          name: Poolt-INTERNAL-debug-not-for-install
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Stage unsigned release and Android signer for local one-time bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p signing-bootstrap
+          cp app/build/outputs/apk/release/app-release-unsigned.apk signing-bootstrap/app-release-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" signing-bootstrap/apksigner.jar
+
+      - name: Upload temporary unsigned input (NOT installable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Poolt-BOOTSTRAP-UNSIGNED-not-installable
+          path: signing-bootstrap/
+          if-no-files-found: error
+          retention-days: 7
