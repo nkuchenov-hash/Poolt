@@ -58,6 +58,10 @@ data class MainUiState(
     val pointerConfirmed: Boolean = false,
     val pointerStatus: String = "",
     val hapticEnabled: Boolean = true,
+    val keyboardSession: Int = 0,
+    val tvKeyboardFocused: Boolean = false,
+    val keyboardSending: Boolean = false,
+    val keyboardMessage: String = "",
     val showDevicePicker: Boolean = false,
     val manualIp: String = "",
     val connectionMessage: String = "",
@@ -69,9 +73,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val irRepository = IrProfileRepository(app)
 
     private val lgDriver = LgWebOsDriver(app)
+    private val samsungDriver = SamsungDriver(app)
     private val registry = DriverRegistry(listOf(
         RokuDriver(),
-        SamsungDriver(app),
+        samsungDriver,
         lgDriver
     ))
     private var lastPointerMoveAt = 0L
@@ -88,7 +93,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             savedIrProfileIds = selectionPrefs.getStringSet("saved_ir_profiles", emptySet())?.toSet() ?: emptySet(),
             irAvailable = irTransmitter.hasEmitter,
             irProfiles = initialProfiles,
-            selectedIrProfile = initialProfiles.firstOrNull(),
+            selectedIrProfile = null,
+            mode = if (selectionPrefs.getString("mode", "IR") == "WIFI") ControlMode.WIFI else ControlMode.IR,
             irCatalog = runCatching { irRepository.cachedIrdbIndex() }.getOrDefault(emptyList()),
             connectionMessage = if (irTransmitter.hasEmitter) "ИК-порт готов" else "На телефоне не найден ИК-передатчик"
         )
@@ -116,7 +122,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 else -> "TV"
             }
             _state.value = _state.value.copy(
-                mode = if (selectionPrefs.getString("mode", "IR") == "WIFI") ControlMode.WIFI else ControlMode.IR,
                 selected = _state.value.savedWifiDevices.firstOrNull { it.address == ip && it.driverId == driverId }
                     ?: Device("$driverId@$ip", "$brand Smart TV",
                         type = DeviceType.TV, driverId = driverId, brand = brand,
@@ -214,7 +219,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val currentId = _state.value.selectedIrProfile?.id
                 _state.value = _state.value.copy(
                     irProfiles = profiles,
-                    selectedIrProfile = profiles.firstOrNull { it.id == currentId } ?: profiles.firstOrNull(),
+                    selectedIrProfile = profiles.firstOrNull { it.id == currentId },
                     irVerified = profiles.any { it.id == currentId } && _state.value.irVerified
                 )
             }
@@ -364,6 +369,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setManualIp(value: String) { _state.value = _state.value.copy(manualIp = value.filter { it.isDigit() || it == '.' }) }
 
     fun selectDevice(device: Device) {
+        lgDriver.stopKeyboardMonitor()
+        samsungDriver.stopKeyboardMonitor()
         selectionPrefs.edit().putString("wifi_ip", device.address)
             .putString("wifi_driver", device.driverId).putString("mode", "WIFI").apply()
         _state.value = _state.value.copy(
@@ -372,6 +379,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             pointerReady = false,
             pointerConfirmed = false,
             pointerStatus = "",
+            tvKeyboardFocused = false,
+            keyboardMessage = "",
             showDevicePicker = false
         )
         pairSelected()
@@ -393,15 +402,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             address = ip,
             isOnline = false
         )
-        _state.value = _state.value.copy(
-            mode = ControlMode.WIFI,
-            selected = device,
-            pointerReady = false,
-            pointerConfirmed = false,
-            pointerStatus = "",
-            showDevicePicker = false
-        )
-        pairSelected()
+        selectDevice(device)
     }
 
     fun pairSelected() {
@@ -428,10 +429,80 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 connectionMessage = if (result.isSuccess) "Wi-Fi подключено"
                     else (result.exceptionOrNull()?.message ?: "Ошибка подключения")
             )
-            if (result.isSuccess && device.driverId == "lg.webos") {
-                checkLgPointer()
+            if (result.isSuccess) {
+                if (device.driverId == "lg.webos") {
+                    lgDriver.watchKeyboard(device) { focus ->
+                        updateTvKeyboardFocus(device, focus)
+                    }
+                    checkLgPointer()
+                } else if (device.driverId == "samsung.smarttv") {
+                    samsungDriver.watchKeyboard(device) { focus ->
+                        updateTvKeyboardFocus(device, focus)
+                    }
+                }
             }
         }
+    }
+
+    private fun updateTvKeyboardFocus(device: Device, focused: Boolean) {
+        val current = _state.value
+        if (current.mode != ControlMode.WIFI || current.selected?.driverId != device.driverId ||
+            current.selected?.address != device.address) return
+        _state.value = current.copy(
+            tvKeyboardFocused = focused,
+            keyboardSession = if (focused && !current.tvKeyboardFocused)
+                current.keyboardSession + 1 else current.keyboardSession
+        )
+    }
+
+    fun sendTvText(text: String) {
+        if (text.isBlank()) {
+            _state.value = _state.value.copy(keyboardMessage = "Введите текст")
+            return
+        }
+        if (text.length > 1000) {
+            _state.value = _state.value.copy(keyboardMessage = "Не более 1000 символов")
+            return
+        }
+        val device = _state.value.selected
+        if (_state.value.mode != ControlMode.WIFI || device == null || !device.isOnline) {
+            _state.value = _state.value.copy(keyboardMessage = "Подключите Smart TV по Wi-Fi для отправки текста")
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(keyboardSending = true, keyboardMessage = "")
+            val result = when (device.driverId) {
+                "lg.webos" -> lgDriver.insertText(device, text)
+                "samsung.smarttv" -> samsungDriver.insertText(device, text)
+                else -> Result.failure(IllegalArgumentException("Текстовый ввод для этой модели не поддерживается"))
+            }
+            _state.value = _state.value.copy(
+                keyboardSending = false,
+                keyboardMessage = if (result.isSuccess) "Текст передан телевизору"
+                    else "Не удалось ввести текст: " + (result.exceptionOrNull()?.localizedMessage ?: "ошибка")
+            )
+        }
+    }
+
+    fun tvKeyboardAction(action: String) {
+        val device = _state.value.selected ?: return
+        if (_state.value.mode != ControlMode.WIFI || !device.isOnline) return
+        viewModelScope.launch {
+            val result = when (device.driverId) {
+                "lg.webos" -> if (action == "enter") lgDriver.submitText(device) else lgDriver.deleteText(device)
+                "samsung.smarttv" -> if (action == "enter") samsungDriver.submitText(device) else samsungDriver.deleteText(device)
+                else -> Result.failure(IllegalArgumentException("Не поддерживается"))
+            }
+            if (result.isFailure) _state.value = _state.value.copy(
+                keyboardMessage = result.exceptionOrNull()?.localizedMessage ?: "Ошибка ввода"
+            )
+        }
+    }
+
+    override fun onCleared() {
+        lgDriver.stopKeyboardMonitor()
+        samsungDriver.stopKeyboardMonitor()
+        super.onCleared()
     }
 
     fun checkLgPointer() {
