@@ -160,7 +160,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val current = _state.value.selected
         _state.value = _state.value.copy(
             savedWifiDevices = saved,
-            selected = if (current?.driverId == device.driverId && current.address == device.address) null else current
+            selected = if (current?.driverId == device.driverId && current?.address == device.address) null else current
         )
         if (_state.value.selected == null) {
             selectionPrefs.edit().remove("wifi_ip").remove("wifi_driver").apply()
