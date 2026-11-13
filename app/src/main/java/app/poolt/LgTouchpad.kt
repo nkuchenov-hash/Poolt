@@ -1,6 +1,5 @@
 package app.poolt
 
-import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -19,6 +18,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -37,6 +37,8 @@ fun LgTouchpadSurface(
     size: Dp
 ) {
     val view = LocalView.current
+    val context = LocalContext.current
+    val haptics = androidx.compose.runtime.remember(context) { HapticEngine(context) }
     val shape = RoundedCornerShape(28.dp)
 
     Box(
@@ -56,9 +58,7 @@ fun LgTouchpadSurface(
             }
             .pointerInput(state.selected?.id, state.hapticEnabled) {
                 detectTapGestures(onTap = {
-                    if (state.hapticEnabled) {
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    }
+                    haptics.tap(view, state.hapticEnabled)
                     vm.clickPointer()
                 })
             },
