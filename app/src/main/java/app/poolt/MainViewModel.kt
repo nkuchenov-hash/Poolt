@@ -15,6 +15,8 @@ import app.poolt.network.SsdpDiscovery
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +41,8 @@ data class MainUiState(
     val isTestingIr: Boolean = false,
     val irTestMessage: String = "",
     val devices: List<Device> = emptyList(),
+    val savedWifiDevices: List<Device> = emptyList(),
+    val savedIrProfileIds: Set<String> = emptySet(),
     val selected: Device? = null,
     val presets: List<DevicePreset> = listOf(
         DevicePreset("Samsung", "Smart TV 2016+", "samsung.smarttv"),
@@ -78,6 +82,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(
         MainUiState(
+            savedWifiDevices = readSavedWifiDevices(),
+            savedIrProfileIds = selectionPrefs.getStringSet("saved_ir_profiles", emptySet())?.toSet() ?: emptySet(),
             irAvailable = irTransmitter.hasEmitter,
             irProfiles = initialProfiles,
             selectedIrProfile = initialProfiles.firstOrNull(),
@@ -109,11 +115,65 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             _state.value = _state.value.copy(
                 mode = if (selectionPrefs.getString("mode", "IR") == "WIFI") ControlMode.WIFI else ControlMode.IR,
-                selected = Device("$driverId@$ip", "$brand Smart TV",
-                    type = DeviceType.TV, driverId = driverId, brand = brand,
-                    model = "Сохранённое устройство", address = ip, isOnline = false)
+                selected = _state.value.savedWifiDevices.firstOrNull { it.address == ip && it.driverId == driverId }
+                    ?: Device("$driverId@$ip", "$brand Smart TV",
+                        type = DeviceType.TV, driverId = driverId, brand = brand,
+                        model = "Сохранённое устройство", address = ip, isOnline = false)
             )
         }
+        if (_state.value.mode == ControlMode.WIFI && _state.value.selected != null) pairSelected()
+    }
+
+    private fun readSavedWifiDevices(): List<Device> = runCatching {
+        val array = JSONArray(selectionPrefs.getString("paired_wifi_devices", "[]"))
+        (0 until array.length()).mapNotNull { index ->
+            val item = array.optJSONObject(index) ?: return@mapNotNull null
+            val address = item.optString("address").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val driver = item.optString("driver").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            Device(
+                id = item.optString("id").ifBlank { "$driver@$address" },
+                name = item.optString("name").ifBlank { "TV · $address" },
+                type = runCatching { DeviceType.valueOf(item.optString("type", "TV")) }.getOrDefault(DeviceType.TV),
+                driverId = driver, brand = item.optString("brand").ifBlank { null },
+                model = item.optString("model").ifBlank { null }, address = address,
+                isOnline = false
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    private fun persistSavedWifiDevices(devices: List<Device>) {
+        val array = JSONArray()
+        devices.forEach { device ->
+            array.put(JSONObject().put("id", device.id).put("name", device.name)
+                .put("type", device.type.name).put("driver", device.driverId)
+                .put("brand", device.brand ?: "").put("model", device.model ?: "")
+                .put("address", device.address ?: ""))
+        }
+        selectionPrefs.edit().putString("paired_wifi_devices", array.toString()).apply()
+    }
+
+    fun forgetSavedDevice(device: Device) {
+        val saved = _state.value.savedWifiDevices.filterNot {
+            it.driverId == device.driverId && it.address == device.address
+        }
+        persistSavedWifiDevices(saved)
+        val current = _state.value.selected
+        _state.value = _state.value.copy(
+            savedWifiDevices = saved,
+            selected = if (current?.driverId == device.driverId && current.address == device.address) null else current
+        )
+        if (_state.value.selected == null) {
+            selectionPrefs.edit().remove("wifi_ip").remove("wifi_driver").apply()
+        }
+    }
+
+    fun selectSavedIrProfile(profile: IrProfile) {
+        if (profile.id !in _state.value.savedIrProfileIds) return
+        selectionPrefs.edit().putString("selected_ir", profile.id)
+            .putString("verified_ir", profile.id).putString("mode", "IR").apply()
+        _state.value = _state.value.copy(mode = ControlMode.IR, selectedIrProfile = profile,
+            irVerified = true, showDevicePicker = false,
+            connectionMessage = "Сохранённый ИК-пульт · ${profile.brand}")
     }
 
     fun setMode(mode: ControlMode) {
@@ -283,7 +343,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         selectionPrefs.edit().putString("selected_ir", profile.id)
             .putString("verified_ir", profile.id).putString("mode", "IR").apply()
         val merged = _state.value.irProfiles.filterNot { it.id == profile.id } + profile
+        val savedIds = _state.value.savedIrProfileIds + profile.id
+        selectionPrefs.edit().putStringSet("saved_ir_profiles", savedIds).apply()
         _state.value = _state.value.copy(
+            savedIrProfileIds = savedIds,
             irProfiles = merged, selectedIrProfile = profile, irVerified = true,
             irTrialProfile = null, irTestMessage = "", mode = ControlMode.IR,
             showDevicePicker = false, connectionMessage = "ИК-профиль выбран · " + profile.brand
@@ -348,6 +411,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _state.value = _state.value.copy(
                 isPairing = false,
                 selected = device.copy(isOnline = result.isSuccess),
+                savedWifiDevices = if (result.isSuccess) {
+                    val updated = (_state.value.savedWifiDevices.filterNot {
+                        it.driverId == device.driverId && it.address == device.address
+                    } + device.copy(isOnline = true))
+                    persistSavedWifiDevices(updated)
+                    updated
+                } else _state.value.savedWifiDevices,
                 connectionMessage = if (result.isSuccess) "Wi-Fi подключено"
                     else (result.exceptionOrNull()?.message ?: "Ошибка подключения")
             )
