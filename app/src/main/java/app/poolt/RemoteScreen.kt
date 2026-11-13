@@ -50,6 +50,7 @@ fun RemoteScreen(vm: MainViewModel) {
     val view = LocalView.current
     var showAppSettings by rememberSaveable { mutableStateOf(false) }
     var useTouchpad by remember(state.selected?.id) { mutableStateOf(false) }
+    var modeHelp by rememberSaveable { mutableStateOf(false) }
     val isLgWifi = state.mode == ControlMode.WIFI &&
         state.selected?.driverId == "lg.webos"
     val pointerAvailable = isLgWifi && state.selected?.isOnline == true && state.pointerReady
@@ -180,44 +181,134 @@ fun RemoteScreen(vm: MainViewModel) {
                         .padding(horizontal = 13.dp, vertical = 9.dp)
                 ) { Text("+ Добавить", fontSize = 13.sp, color = SoftText) }
             }
-            // Controls float on the dark background, without an enclosing panel.
+
+            // Primary controls receive most visual space. Secondary actions
+            // are intentionally separate from the navigation ring.
             Column(
                 Modifier.fillMaxWidth().heightIn(min = minimumRemoteHeight)
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(
-                    Modifier.fillMaxWidth(),
+                    Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RemoteRoundKey(Icons.Default.PowerSettingsNew, "Питание", true, 53.dp) {
+                    RemoteRoundKey(Icons.Default.PowerSettingsNew, "Питание", true, 60.dp) {
                         send(RemoteCommand.POWER)
                     }
-                    RemoteRoundKey(Icons.Default.Input, "Источник", false, 53.dp) {
-                        send(RemoteCommand.SOURCE)
-                    }
-                    RemoteRoundKey(Icons.Default.Home, "Главная", false, 53.dp) {
+                    RemoteRoundKey(Icons.Default.Home, "Главная", false, 60.dp) {
                         send(RemoteCommand.HOME)
                     }
-                    RemoteRoundKey(Icons.Default.Menu, "Меню", false, 53.dp) {
-                        send(RemoteCommand.MENU)
+                    RemoteRoundKey(Icons.Default.Input, "Источник", false, 60.dp) {
+                        send(RemoteCommand.SOURCE)
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    // Fit even narrow Android screens: no cropped channel/volume rockers.
-                    val compact = maxWidth < 320.dp
-                    val rockerWidth = if (compact) 48.dp else 59.dp
-                    val gap = if (compact) 5.dp else 7.dp
-                    val dialSize = (maxWidth - rockerWidth * 2 - gap * 2)
-                        .coerceAtMost(235.dp)
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    val dialSize = maxWidth.coerceAtMost(258.dp)
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (useTouchpad && pointerAvailable) {
+                            LgTouchpadSurface(state, vm, dialSize)
+                        } else {
+                            CompassPad(dialSize, send)
+                        }
+
+                        Spacer(Modifier.height(13.dp))
+                        Row(
+                            Modifier.clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFF1F222B))
+                                .border(1.dp, Color(0xFF383D49), RoundedCornerShape(20.dp))
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(
+                                false to "Джойстик",
+                                true to "Тачпад"
+                            ).forEach { (touchpad, title) ->
+                                val active = useTouchpad == touchpad
+                                val enabled = !touchpad || pointerAvailable || isLgWifi
+                                Row(
+                                    Modifier.clip(RoundedCornerShape(16.dp))
+                                        .background(
+                                            if (active) Color(0xFF41424F)
+                                            else Color.Transparent
+                                        )
+                                        .clickable {
+                                            when {
+                                                !touchpad -> {
+                                                    if (useTouchpad) feedback()
+                                                    useTouchpad = false
+                                                    modeHelp = false
+                                                }
+                                                pointerAvailable -> {
+                                                    feedback()
+                                                    useTouchpad = true
+                                                    modeHelp = false
+                                                }
+                                                isLgWifi && state.selected?.isOnline == true -> {
+                                                    feedback()
+                                                    modeHelp = true
+                                                    vm.checkLgPointer()
+                                                }
+                                                else -> modeHelp = true
+                                            }
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        if (touchpad) Icons.Default.TouchApp else Icons.Default.Gamepad,
+                                        title, Modifier.size(19.dp),
+                                        tint = when {
+                                            active -> White
+                                            enabled -> SoftText
+                                            else -> Color(0xFF777D88)
+                                        }
+                                    )
+                                    Text(
+                                        title,
+                                        color = if (active) White else if (enabled) SoftText
+                                            else Color(0xFF777D88),
+                                        fontSize = 13.sp,
+                                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                        if (modeHelp && !pointerAvailable) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                when {
+                                    !isLgWifi -> "Тачпад доступен для совместимого LG webOS по Wi-Fi"
+                                    state.selected?.isOnline != true -> "Подключите телевизор LG для проверки тачпада"
+                                    state.pointerChecking -> "Проверяем поддержку курсора LG…"
+                                    else -> state.pointerStatus.ifBlank {
+                                        "Поддержка тачпада пока не подтверждена"
+                                    }
+                                },
+                                color = SoftText, fontSize = 12.sp
+                            )
+                        }
+                        if (useTouchpad && pointerAvailable && !state.pointerConfirmed) {
+                            TextButton(onClick = vm::confirmLgPointerWorks) {
+                                Text("Курсор работает? Подтвердить", color = SoftText, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val rockerWidth = if (maxWidth < 325.dp) 53.dp else 61.dp
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
+                        horizontalArrangement = Arrangement.spacedBy(11.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         NeonRocker(
@@ -226,13 +317,33 @@ fun RemoteScreen(vm: MainViewModel) {
                             { send(RemoteCommand.VOLUME_UP) },
                             { send(RemoteCommand.VOLUME_DOWN) }
                         )
-                        Spacer(Modifier.width(gap))
-                        if (useTouchpad && pointerAvailable) {
-                            LgTouchpadSurface(state, vm, dialSize)
-                        } else {
-                            CompassPad(dialSize, send)
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CompactActionKey(
+                                    Icons.Default.ArrowBack, "Назад", Modifier.weight(1f)
+                                ) { send(RemoteCommand.BACK) }
+                                CompactActionKey(
+                                    Icons.Default.VolumeOff, "Звук", Modifier.weight(1f)
+                                ) { send(RemoteCommand.MUTE) }
+                            }
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CompactActionKey(
+                                    Icons.Default.Menu, "Меню", Modifier.weight(1f)
+                                ) { send(RemoteCommand.MENU) }
+                                CompactActionKey(
+                                    Icons.Default.ListAlt, "Гид", Modifier.weight(1f)
+                                ) { send(RemoteCommand.GUIDE) }
+                            }
                         }
-                        Spacer(Modifier.width(gap))
                         NeonRocker(
                             Modifier.width(rockerWidth),
                             "CH", Icons.Default.KeyboardArrowUp,
@@ -241,93 +352,8 @@ fun RemoteScreen(vm: MainViewModel) {
                             { send(RemoteCommand.CHANNEL_DOWN) }
                         )
                     }
-                    if (pointerAvailable) {
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            Modifier.align(Alignment.CenterHorizontally)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(Color(0xFF1F2028))
-                                .border(1.dp, Color(0xFF454650), RoundedCornerShape(18.dp))
-                                .padding(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            listOf(
-                                false to "Джойстик",
-                                true to "Тачпад"
-                            ).forEach { (touchpad, title) ->
-                                val selected = useTouchpad == touchpad
-                                Row(
-                                    Modifier.clip(RoundedCornerShape(14.dp))
-                                        .background(if (selected) Color(0xFF343044) else Color.Transparent)
-                                        .clickable {
-                                            if (useTouchpad != touchpad) {
-                                                feedback()
-                                                useTouchpad = touchpad
-                                            }
-                                        }
-                                        .padding(horizontal = 13.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        if (touchpad) Icons.Default.TouchApp else Icons.Default.Gamepad,
-                                        null, Modifier.size(18.dp),
-                                        tint = if (selected) White else SoftText
-                                    )
-                                    Text(
-                                        title, fontSize = 13.sp,
-                                        color = if (selected) White else SoftText
-                                    )
-                                }
-                            }
-                        }
-                        if (useTouchpad && !state.pointerConfirmed) {
-                            TextButton(
-                                onClick = {
-                                    feedback()
-                                    vm.confirmLgPointerWorks()
-                                },
-                                modifier = Modifier.align(Alignment.CenterHorizontally)
-                            ) {
-                                Text("Курсор работает на ТВ? Подтвердить", color = SoftText, fontSize = 12.sp)
-                            }
-                        }
-                    } else if (isLgWifi && state.selected?.isOnline == true) {
-                        Spacer(Modifier.height(10.dp))
-                        TextButton(
-                            enabled = !state.pointerChecking,
-                            onClick = vm::checkLgPointer,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Text(
-                                if (state.pointerChecking) "Проверяем тачпад LG…"
-                                else "Проверить поддержку тачпада",
-                                color = SoftText, fontSize = 13.sp
-                            )
-                        }
-                    }
-                    }
-                }
-                Spacer(Modifier.height(19.dp))
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RemoteRoundKey(Icons.Default.ArrowBack, "Назад", false, 54.dp) {
-                        send(RemoteCommand.BACK)
-                    }
-                    RemoteRoundKey(Icons.Default.VolumeOff, "Без звука", false, 54.dp) {
-                        send(RemoteCommand.MUTE)
-                    }
-                    RemoteRoundKey(Icons.Default.Settings, "Настройки", false, 54.dp) {
-                        send(RemoteCommand.SETTINGS)
-                    }
                 }
 
-                Spacer(Modifier.height(10.dp))
                 MoreRemoteKeys(send)
             }
             if (state.mode == ControlMode.WIFI &&
@@ -428,6 +454,31 @@ private fun RemoteRoundKey(
 }
 
 @Composable
+private fun CompactActionKey(
+    icon: ImageVector,
+    title: String,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(19.dp)
+    Column(
+        modifier.height(68.dp)
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(listOf(Color(0xFF252A34), Color(0xFF191C25)))
+            )
+            .border(1.dp, Color(0xFF343944), shape)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, title, Modifier.size(23.dp), tint = White)
+        Spacer(Modifier.height(4.dp))
+        Text(title, fontSize = 11.sp, color = SoftText, maxLines = 1)
+    }
+}
+
+@Composable
 private fun NeonRocker(
     modifier: Modifier,
     title: String,
@@ -436,31 +487,27 @@ private fun NeonRocker(
     onTop: () -> Unit,
     onBottom: () -> Unit
 ) {
+    val shape = RoundedCornerShape(25.dp)
     Column(
-        modifier.height(191.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(Brush.verticalGradient(listOf(SurfaceTop, SurfaceBottom)))
-            .border(
-                width = 1.dp,
-                color = Color(0xFF42434B),
-                shape = RoundedCornerShape(26.dp)
-            ),
+        modifier.height(144.dp)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(Color(0xFF242934), Color(0xFF151922))))
+            .border(1.dp, Color(0xFF3E4350), shape),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Box(
-            Modifier.fillMaxWidth().height(68.dp).clickable(onClick = onTop),
+            Modifier.fillMaxWidth().height(56.dp).clickable(onClick = onTop),
             contentAlignment = Alignment.Center
-        ) {
-            Icon(topIcon, title + " +", tint = White, modifier = Modifier.size(29.dp))
-        }
-        Text(title, color = Color(0xFFDEE0E5), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        ) { Icon(topIcon, title + " up", Modifier.size(27.dp), tint = White) }
+        Text(
+            title, color = SoftText, fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold, maxLines = 1
+        )
         Box(
-            Modifier.fillMaxWidth().height(68.dp).clickable(onClick = onBottom),
+            Modifier.fillMaxWidth().height(56.dp).clickable(onClick = onBottom),
             contentAlignment = Alignment.Center
-        ) {
-            Icon(bottomIcon, title + " −", tint = White, modifier = Modifier.size(29.dp))
-        }
+        ) { Icon(bottomIcon, title + " down", Modifier.size(27.dp), tint = White) }
     }
 }
 
