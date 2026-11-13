@@ -2,6 +2,7 @@ package app.poolt
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -55,8 +56,8 @@ fun RemoteScreen(vm: MainViewModel) {
         containerColor = ScreenBg,
         topBar = {
             Row(
-                Modifier.fillMaxWidth().background(ScreenBg)
-                    .padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                Modifier.fillMaxWidth().background(ScreenBg).statusBarsPadding()
+                    .padding(start = 17.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(
@@ -66,7 +67,7 @@ fun RemoteScreen(vm: MainViewModel) {
                     verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.app_name), fontSize = 21.sp,
+                        Text(stringResource(R.string.app_name), fontSize = 19.sp, maxLines = 1,
                             fontWeight = FontWeight.Bold, color = White)
                         Spacer(Modifier.width(6.dp))
                         Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(19.dp), tint = SoftText)
@@ -105,7 +106,7 @@ fun RemoteScreen(vm: MainViewModel) {
                     }
                 }
                 Box(
-                    Modifier.size(42.dp).clip(CircleShape)
+                    Modifier.size(40.dp).clip(CircleShape)
                         .background(Brush.verticalGradient(listOf(SurfaceTop, SurfaceBottom)))
                         .border(1.dp, Color(0xFF3B3C41), CircleShape)
                         .clickable { vm.openPicker() },
@@ -114,17 +115,62 @@ fun RemoteScreen(vm: MainViewModel) {
             }
         }
     ) { scaffoldPadding ->
-        Column(
-            Modifier.fillMaxSize()
-                .padding(scaffoldPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(start = 15.dp, end = 15.dp, bottom = 30.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        BoxWithConstraints(
+            Modifier.fillMaxSize().padding(scaffoldPadding).navigationBarsPadding()
         ) {
+          val minimumRemoteHeight = (maxHeight - 75.dp).coerceAtLeast(435.dp)
+          Column(
+              Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                  .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+              horizontalAlignment = Alignment.CenterHorizontally
+          ) {
+            val savedIr = state.irProfiles.filter { it.id in state.savedIrProfileIds }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                    .padding(vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (state.savedWifiDevices.isEmpty() && savedIr.isEmpty()) {
+                    Text("Нет сохранённых устройств", color = SoftText, fontSize = 13.sp)
+                }
+                state.savedWifiDevices.forEach { device ->
+                    val active = state.mode == ControlMode.WIFI &&
+                        state.selected?.driverId == device.driverId &&
+                        state.selected?.address == device.address
+                    Box(
+                        Modifier.clip(RoundedCornerShape(16.dp))
+                            .background(if (active) Color(0xFF483039) else KeySurface)
+                            .border(1.dp, if (active) Red else Color(0xFF414047), RoundedCornerShape(16.dp))
+                            .clickable { vm.selectDevice(device) }
+                            .padding(horizontal = 14.dp, vertical = 9.dp)
+                    ) {
+                        Text(device.name, maxLines = 1, fontSize = 13.sp, color = White)
+                    }
+                }
+                savedIr.forEach { profile ->
+                    val active = state.mode == ControlMode.IR && state.selectedIrProfile?.id == profile.id
+                    Box(
+                        Modifier.clip(RoundedCornerShape(16.dp))
+                            .background(if (active) Color(0xFF483039) else KeySurface)
+                            .border(1.dp, if (active) Red else Color(0xFF414047), RoundedCornerShape(16.dp))
+                            .clickable { vm.selectSavedIrProfile(profile) }
+                            .padding(horizontal = 14.dp, vertical = 9.dp)
+                    ) {
+                        Text(profile.brand + " · ИК", maxLines = 1, fontSize = 13.sp, color = White)
+                    }
+                }
+                Box(
+                    Modifier.clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, Color(0xFF414047), RoundedCornerShape(16.dp))
+                        .clickable { vm.openPicker() }
+                        .padding(horizontal = 13.dp, vertical = 9.dp)
+                ) { Text("+ Добавить", fontSize = 13.sp, color = SoftText) }
+            }
             // One cohesive remote body. The very subtle red edge light is decorative
             // and does not change the size or hit area of the controls.
             Column(
-                Modifier.fillMaxWidth()
+                Modifier.fillMaxWidth().heightIn(min = minimumRemoteHeight)
                     .clip(RoundedCornerShape(27.dp))
                     .background(
                         Brush.verticalGradient(
@@ -139,7 +185,8 @@ fun RemoteScreen(vm: MainViewModel) {
                         shape = RoundedCornerShape(27.dp)
                     )
                     .padding(horizontal = 12.dp, vertical = 17.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -229,6 +276,7 @@ fun RemoteScreen(vm: MainViewModel) {
                     Text("Повторить подключение", color = White, fontSize = 15.sp)
                 }
             }
+          }
         }
     }
 
