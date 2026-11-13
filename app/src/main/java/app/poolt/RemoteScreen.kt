@@ -1,6 +1,8 @@
 package app.poolt
 
-import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
@@ -48,20 +50,18 @@ private val Green = Color(0xFF35C873)
 fun RemoteScreen(vm: MainViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val view = LocalView.current
+    val context = LocalContext.current
+    val haptics = remember(context) { HapticEngine(context) }
+    var keyboardOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.keyboardSession) {
+        if (state.keyboardSession > 0) keyboardOpen = true
+    }
     var showAppSettings by rememberSaveable { mutableStateOf(false) }
     var useTouchpad by remember(state.selected?.id) { mutableStateOf(false) }
-    var modeHelp by rememberSaveable { mutableStateOf(false) }
     val isLgWifi = state.mode == ControlMode.WIFI &&
         state.selected?.driverId == "lg.webos"
     val pointerAvailable = isLgWifi && state.selected?.isOnline == true && state.pointerReady
-    LaunchedEffect(pointerAvailable) {
-        if (!pointerAvailable) useTouchpad = false
-    }
-    val feedback: () -> Unit = {
-        if (state.hapticEnabled) {
-            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-        }
-    }
+    val feedback: () -> Unit = { haptics.tap(view, state.hapticEnabled) }
     val send: (RemoteCommand) -> Unit = { command ->
         feedback()
         vm.send(command)
@@ -69,63 +69,112 @@ fun RemoteScreen(vm: MainViewModel) {
     Scaffold(
         containerColor = ScreenBg,
         topBar = {
-            Row(
+            Column(
                 Modifier.fillMaxWidth().background(ScreenBg).statusBarsPadding()
-                    .padding(start = 17.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 7.dp)
             ) {
-                Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
-                        .clickable { vm.openPicker() }
-                        .padding(vertical = 3.dp),
-                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.app_name), fontSize = 19.sp, maxLines = 1,
-                            fontWeight = FontWeight.Bold, color = White)
-                        Spacer(Modifier.width(6.dp))
-                        Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(19.dp), tint = SoftText)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val ready = when (state.mode) {
-                            ControlMode.IR -> state.irAvailable && state.irVerified &&
-                                state.selectedIrProfile != null
-                            ControlMode.WIFI -> state.selected?.isOnline == true
-                        }
-                        Box(
-                            Modifier.size(7.dp).clip(CircleShape).background(
-                                if (ready) Green else Color(0xFF62646A)
-                            )
-                        )
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            text = when (state.mode) {
-                                ControlMode.IR -> state.selectedIrProfile?.let {
-                                    it.brand + " · ИК · " +
-                                        if (state.irVerified) "проверен" else "не проверен"
-                                } ?: "Выбрать устройство"
-                                ControlMode.WIFI -> when {
-                                    state.selected == null -> "Выбрать устройство"
-                                    state.selected?.driverId == "lg.webos" && state.pointerConfirmed ->
-                                        "LG webOS · Wi-Fi · курсор проверен"
-                                    state.selected?.driverId == "lg.webos" ->
-                                        "LG webOS · " + if (ready) "Wi-Fi" else "не подключён"
-                                    else -> state.selected?.name.orEmpty() +
-                                        " · " + if (ready) "Wi-Fi" else "не подключён"
-                                }
-                            },
-                            fontSize = 12.sp, color = SoftText, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    Text(
+                        stringResource(R.string.app_name),
+                        color = White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { feedback(); showAppSettings = true }, modifier = Modifier.size(42.dp)) {
+                        Icon(Icons.Default.Settings, "Настройки приложения", tint = SoftText)
                     }
                 }
-                Box(
-                    Modifier.size(40.dp).clip(CircleShape)
-                        .background(Brush.verticalGradient(listOf(SurfaceTop, SurfaceBottom)))
-                        .border(1.dp, Color(0xFF3B3C41), CircleShape)
-                        .clickable { showAppSettings = true },
-                    contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.Settings, "Настройки приложения", tint = White) }
+                Spacer(Modifier.height(5.dp))
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 58.dp),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        Modifier.weight(1f)
+                            .clip(RoundedCornerShape(17.dp))
+                            .background(Color(0xFF1C2028))
+                            .border(1.dp, Color(0xFF363C48), RoundedCornerShape(17.dp))
+                            .clickable { feedback(); vm.openPicker() }
+                            .padding(horizontal = 13.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Tv, null, Modifier.size(21.dp), tint = SoftText)
+                        Spacer(Modifier.width(10.dp))
+                        val ready = when (state.mode) {
+                            ControlMode.IR -> state.irAvailable && state.irVerified && state.selectedIrProfile != null
+                            ControlMode.WIFI -> state.selected?.isOnline == true
+                        }
+                        Column(Modifier.weight(1f)) {
+                            val selectedName = when (state.mode) {
+                                ControlMode.IR -> state.selectedIrProfile?.let { "${it.brand} · ИК" }
+                                ControlMode.WIFI -> state.selected?.let { device ->
+                                    device.brand?.let { brand ->
+                                        if (device.name.startsWith(brand, true)) device.name else "$brand · ${device.name}"
+                                    } ?: device.name
+                                }
+                            } ?: "Выбрать телевизор"
+                            Text(selectedName, color = White, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                when {
+                                    ready -> if (state.mode == ControlMode.WIFI) "Подключено по Wi-Fi" else "ИК-пульт проверен"
+                                    state.isPairing -> "Подключаем…"
+                                    state.selected != null && state.mode == ControlMode.WIFI -> "Не подключён · нажми для выбора"
+                                    state.selectedIrProfile != null && state.mode == ControlMode.IR -> "ИК-пульт не проверен"
+                                    else -> "Нажми, чтобы выбрать устройство"
+                                },
+                                color = if (ready) Green else SoftText,
+                                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(Icons.Default.ExpandMore, null, Modifier.size(23.dp), tint = SoftText)
+                    }
+                    Box(
+                        Modifier.size(51.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFF1C2028))
+                            .border(1.dp, Color(0xFF363C48), RoundedCornerShape(16.dp))
+                            .clickable { feedback(); vm.openPicker() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Add, "Добавить устройство", Modifier.size(25.dp), tint = White)
+                    }
+                }
+                if (state.savedWifiDevices.size + state.savedIrProfileIds.size > 1) {
+                    Spacer(Modifier.height(7.dp))
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        state.savedWifiDevices.forEach { device ->
+                            val active = state.mode == ControlMode.WIFI &&
+                                state.selected?.driverId == device.driverId &&
+                                state.selected?.address == device.address
+                            Text(
+                                device.brand ?: device.name,
+                                modifier = Modifier.clip(RoundedCornerShape(14.dp))
+                                    .background(if (active) Color(0xFF40343F) else Color(0xFF1B1D24))
+                                    .clickable { feedback(); vm.selectDevice(device) }
+                                    .padding(horizontal = 13.dp, vertical = 8.dp),
+                                color = if (active) White else SoftText, fontSize = 12.sp
+                            )
+                        }
+                        state.irProfiles.filter { it.id in state.savedIrProfileIds }.forEach { profile ->
+                            Text(
+                                "${profile.brand} · ИК",
+                                modifier = Modifier.clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0xFF1B1D24))
+                                    .clickable { feedback(); vm.selectSavedIrProfile(profile) }
+                                    .padding(horizontal = 13.dp, vertical = 8.dp),
+                                color = SoftText, fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
             }
         }
     ) { scaffoldPadding ->
@@ -138,50 +187,6 @@ fun RemoteScreen(vm: MainViewModel) {
                   .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
               horizontalAlignment = Alignment.CenterHorizontally
           ) {
-            val savedIr = state.irProfiles.filter { it.id in state.savedIrProfileIds }
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                    .padding(vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (state.savedWifiDevices.isEmpty() && savedIr.isEmpty()) {
-                    Text("Нет сохранённых устройств", color = SoftText, fontSize = 13.sp)
-                }
-                state.savedWifiDevices.forEach { device ->
-                    val active = state.mode == ControlMode.WIFI &&
-                        state.selected?.driverId == device.driverId &&
-                        state.selected?.address == device.address
-                    Box(
-                        Modifier.clip(RoundedCornerShape(16.dp))
-                            .background(if (active) Color(0xFF483039) else KeySurface)
-                            .border(1.dp, if (active) Red else Color(0xFF414047), RoundedCornerShape(16.dp))
-                            .clickable { vm.selectDevice(device) }
-                            .padding(horizontal = 14.dp, vertical = 9.dp)
-                    ) {
-                        Text(device.name, maxLines = 1, fontSize = 13.sp, color = White)
-                    }
-                }
-                savedIr.forEach { profile ->
-                    val active = state.mode == ControlMode.IR && state.selectedIrProfile?.id == profile.id
-                    Box(
-                        Modifier.clip(RoundedCornerShape(16.dp))
-                            .background(if (active) Color(0xFF483039) else KeySurface)
-                            .border(1.dp, if (active) Red else Color(0xFF414047), RoundedCornerShape(16.dp))
-                            .clickable { vm.selectSavedIrProfile(profile) }
-                            .padding(horizontal = 14.dp, vertical = 9.dp)
-                    ) {
-                        Text(profile.brand + " · ИК", maxLines = 1, fontSize = 13.sp, color = White)
-                    }
-                }
-                Box(
-                    Modifier.clip(RoundedCornerShape(16.dp))
-                        .border(1.dp, Color(0xFF414047), RoundedCornerShape(16.dp))
-                        .clickable { vm.openPicker() }
-                        .padding(horizontal = 13.dp, vertical = 9.dp)
-                ) { Text("+ Добавить", fontSize = 13.sp, color = SoftText) }
-            }
-
             // Primary controls receive most visual space. Secondary actions
             // are intentionally separate from the navigation ring.
             Column(
@@ -191,17 +196,21 @@ fun RemoteScreen(vm: MainViewModel) {
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 9.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RemoteRoundKey(Icons.Default.PowerSettingsNew, "Питание", true, 60.dp) {
+                    RemoteRoundKey(Icons.Default.PowerSettingsNew, "Питание", true, 56.dp) {
                         send(RemoteCommand.POWER)
                     }
-                    RemoteRoundKey(Icons.Default.Home, "Главная", false, 60.dp) {
+                    RemoteRoundKey(Icons.Default.Home, "Главная", false, 56.dp) {
                         send(RemoteCommand.HOME)
                     }
-                    RemoteRoundKey(Icons.Default.Input, "Источник", false, 60.dp) {
+                    RemoteRoundKey(Icons.Default.Keyboard, "Клавиатура для ввода текста", false, 56.dp) {
+                        feedback()
+                        keyboardOpen = true
+                    }
+                    RemoteRoundKey(Icons.Default.Input, "Источник", false, 56.dp) {
                         send(RemoteCommand.SOURCE)
                     }
                 }
@@ -212,8 +221,9 @@ fun RemoteScreen(vm: MainViewModel) {
                         Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        if (useTouchpad && pointerAvailable) {
-                            LgTouchpadSurface(state, vm, dialSize)
+                        if (useTouchpad) {
+                            if (pointerAvailable) LgTouchpadSurface(state, vm, dialSize)
+                            else SwipeNavigationPad(dialSize, send)
                         } else {
                             CompassPad(dialSize, send)
                         }
@@ -227,74 +237,30 @@ fun RemoteScreen(vm: MainViewModel) {
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            listOf(
-                                false to "Джойстик",
-                                true to "Тачпад"
-                            ).forEach { (touchpad, title) ->
-                                val active = useTouchpad == touchpad
-                                val enabled = !touchpad || pointerAvailable || isLgWifi
-                                Row(
-                                    Modifier.clip(RoundedCornerShape(16.dp))
-                                        .background(
-                                            if (active) Color(0xFF41424F)
-                                            else Color.Transparent
-                                        )
-                                        .clickable {
-                                            when {
-                                                !touchpad -> {
-                                                    if (useTouchpad) feedback()
-                                                    useTouchpad = false
-                                                    modeHelp = false
-                                                }
-                                                pointerAvailable -> {
-                                                    feedback()
-                                                    useTouchpad = true
-                                                    modeHelp = false
-                                                }
-                                                isLgWifi && state.selected?.isOnline == true -> {
-                                                    feedback()
-                                                    modeHelp = true
-                                                    vm.checkLgPointer()
-                                                }
-                                                else -> modeHelp = true
+                            listOf(false to "Джойстик", true to "Тачпад")
+                                .forEach { (touchpad, title) ->
+                                    val active = useTouchpad == touchpad
+                                    Row(
+                                        Modifier.clip(RoundedCornerShape(16.dp))
+                                            .background(if (active) Color(0xFF41424F) else Color.Transparent)
+                                            .livePress {
+                                                if (useTouchpad != touchpad) feedback()
+                                                useTouchpad = touchpad
                                             }
-                                        }
-                                        .padding(horizontal = 14.dp, vertical = 11.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(7.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        if (touchpad) Icons.Default.TouchApp else Icons.Default.Gamepad,
-                                        title, Modifier.size(19.dp),
-                                        tint = when {
-                                            active -> White
-                                            enabled -> SoftText
-                                            else -> Color(0xFF777D88)
-                                        }
-                                    )
-                                    Text(
-                                        title,
-                                        color = if (active) White else if (enabled) SoftText
-                                            else Color(0xFF777D88),
-                                        fontSize = 13.sp,
-                                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                }
-                            }
-                        }
-                        if (modeHelp && !pointerAvailable) {
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                when {
-                                    !isLgWifi -> "Тачпад доступен для совместимого LG webOS по Wi-Fi"
-                                    state.selected?.isOnline != true -> "Подключите телевизор LG для проверки тачпада"
-                                    state.pointerChecking -> "Проверяем поддержку курсора LG…"
-                                    else -> state.pointerStatus.ifBlank {
-                                        "Поддержка тачпада пока не подтверждена"
+                                            .padding(horizontal = 13.dp, vertical = 11.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            if (touchpad) Icons.Default.TouchApp else Icons.Default.Gamepad,
+                                            title, Modifier.size(19.dp),
+                                            tint = if (active) White else SoftText
+                                        )
+                                        Text(title, color = if (active) White else SoftText,
+                                            fontSize = 13.sp, fontWeight = if (active)
+                                                FontWeight.SemiBold else FontWeight.Normal)
                                     }
-                                },
-                                color = SoftText, fontSize = 12.sp
-                            )
+                                }
                         }
                         if (useTouchpad && pointerAvailable && !state.pointerConfirmed) {
                             TextButton(onClick = vm::confirmLgPointerWorks) {
@@ -305,7 +271,7 @@ fun RemoteScreen(vm: MainViewModel) {
                 }
 
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    val rockerWidth = if (maxWidth < 325.dp) 53.dp else 61.dp
+                    val rockerWidth = if (maxWidth < 325.dp) 68.dp else 78.dp
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(11.dp),
@@ -368,6 +334,10 @@ fun RemoteScreen(vm: MainViewModel) {
             }
           }
         }
+    }
+
+    if (keyboardOpen) {
+        TvKeyboardSheet(state = state, vm = vm, onDismiss = { keyboardOpen = false })
     }
 
     if (showAppSettings) {
@@ -444,6 +414,10 @@ private fun RemoteRoundKey(
                 if (isPower) Color(0xFFFF6270) else Color(0xFF3F4147),
                 shape
             )
+            .graphicsLayer {
+                scaleX = if (pressed) 0.93f else 1f
+                scaleY = if (pressed) 0.93f else 1f
+            }
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -462,13 +436,13 @@ private fun CompactActionKey(
 ) {
     val shape = RoundedCornerShape(19.dp)
     Column(
-        modifier.height(68.dp)
+        modifier.height(79.dp)
             .clip(shape)
             .background(
                 Brush.verticalGradient(listOf(Color(0xFF252A34), Color(0xFF191C25)))
             )
             .border(1.dp, Color(0xFF343944), shape)
-            .clickable(onClick = onClick),
+            .livePress(onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -489,7 +463,7 @@ private fun NeonRocker(
 ) {
     val shape = RoundedCornerShape(25.dp)
     Column(
-        modifier.height(144.dp)
+        modifier.height(166.dp)
             .clip(shape)
             .background(Brush.verticalGradient(listOf(Color(0xFF242934), Color(0xFF151922))))
             .border(1.dp, Color(0xFF3E4350), shape),
@@ -497,7 +471,7 @@ private fun NeonRocker(
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Box(
-            Modifier.fillMaxWidth().height(56.dp).clickable(onClick = onTop),
+            Modifier.fillMaxWidth().height(72.dp).livePress(onTop),
             contentAlignment = Alignment.Center
         ) { Icon(topIcon, title + " up", Modifier.size(27.dp), tint = White) }
         Text(
@@ -505,7 +479,7 @@ private fun NeonRocker(
             fontWeight = FontWeight.SemiBold, maxLines = 1
         )
         Box(
-            Modifier.fillMaxWidth().height(56.dp).clickable(onClick = onBottom),
+            Modifier.fillMaxWidth().height(72.dp).livePress(onBottom),
             contentAlignment = Alignment.Center
         ) { Icon(bottomIcon, title + " down", Modifier.size(27.dp), tint = White) }
     }
@@ -571,7 +545,7 @@ private fun CompassPad(
                     )
                 )
                 .border(1.dp, Color(0xFF5B3540), CircleShape)
-                .clickable { send(RemoteCommand.OK) },
+                .livePress { send(RemoteCommand.OK) },
             contentAlignment = Alignment.Center
         ) {
             Text("OK", color = White, fontWeight = FontWeight.SemiBold, fontSize = 19.sp)
@@ -587,7 +561,7 @@ private fun CompassKey(
     onClick: () -> Unit
 ) {
     Box(
-        modifier.clip(CircleShape).clickable(onClick = onClick),
+        modifier.clip(CircleShape).livePress(onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, label, tint = White, modifier = Modifier.size(30.dp))
@@ -602,7 +576,7 @@ private fun MoreRemoteKeys(onCommand: (RemoteCommand) -> Unit) {
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(KeySurface)
-            .clickable { expanded = true }
+            .livePress { expanded = true }
             .padding(vertical = 12.dp, horizontal = 15.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -659,9 +633,24 @@ private fun RectKey(label: String, modifier: Modifier, onClick: () -> Unit) {
             .clip(RoundedCornerShape(15.dp))
             .background(Brush.verticalGradient(listOf(Color(0xFF292930), Color(0xFF1A1A20))))
             .border(1.dp, Color(0xFF393941), RoundedCornerShape(15.dp))
-            .clickable(onClick = onClick),
+            .livePress(onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(label, color = White, fontWeight = FontWeight.Medium, fontSize = 16.sp)
     }
+}
+
+@Composable
+private fun Modifier.livePress(onClick: () -> Unit): Modifier {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.93f else 1f,
+        label = "remote-key-press"
+    )
+    return this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+        alpha = if (pressed) 0.78f else 1f
+    }.clickable(interactionSource = interaction, indication = null, onClick = onClick)
 }
