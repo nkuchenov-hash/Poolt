@@ -48,8 +48,21 @@ private val Green = Color(0xFF35C873)
 fun RemoteScreen(vm: MainViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val view = LocalView.current
+    var showAppSettings by rememberSaveable { mutableStateOf(false) }
+    var useTouchpad by remember(state.selected?.id) { mutableStateOf(false) }
+    val isLgWifi = state.mode == ControlMode.WIFI &&
+        state.selected?.driverId == "lg.webos"
+    val pointerAvailable = isLgWifi && state.selected?.isOnline == true && state.pointerReady
+    LaunchedEffect(pointerAvailable) {
+        if (!pointerAvailable) useTouchpad = false
+    }
+    val feedback: () -> Unit = {
+        if (state.hapticEnabled) {
+            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        }
+    }
     val send: (RemoteCommand) -> Unit = { command ->
-        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        feedback()
         vm.send(command)
     }
     Scaffold(
@@ -109,9 +122,9 @@ fun RemoteScreen(vm: MainViewModel) {
                     Modifier.size(40.dp).clip(CircleShape)
                         .background(Brush.verticalGradient(listOf(SurfaceTop, SurfaceBottom)))
                         .border(1.dp, Color(0xFF3B3C41), CircleShape)
-                        .clickable { vm.openPicker() },
+                        .clickable { showAppSettings = true },
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.Add, "Добавить устройство", tint = White) }
+                ) { Icon(Icons.Default.Settings, "Настройки приложения", tint = White) }
             }
         }
     ) { scaffoldPadding ->
@@ -213,7 +226,11 @@ fun RemoteScreen(vm: MainViewModel) {
                             { send(RemoteCommand.VOLUME_DOWN) }
                         )
                         Spacer(Modifier.width(gap))
-                        CompassPad(dialSize, send)
+                        if (useTouchpad && pointerAvailable) {
+                            LgTouchpadSurface(state, vm, dialSize)
+                        } else {
+                            CompassPad(dialSize, send)
+                        }
                         Spacer(Modifier.width(gap))
                         NeonRocker(
                             Modifier.width(rockerWidth),
@@ -222,6 +239,72 @@ fun RemoteScreen(vm: MainViewModel) {
                             { send(RemoteCommand.CHANNEL_UP) },
                             { send(RemoteCommand.CHANNEL_DOWN) }
                         )
+                    }
+                    if (pointerAvailable) {
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            Modifier.align(Alignment.CenterHorizontally)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color(0xFF1F2028))
+                                .border(1.dp, Color(0xFF454650), RoundedCornerShape(18.dp))
+                                .padding(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            listOf(
+                                false to "Джойстик",
+                                true to "Тачпад"
+                            ).forEach { (touchpad, title) ->
+                                val selected = useTouchpad == touchpad
+                                Row(
+                                    Modifier.clip(RoundedCornerShape(14.dp))
+                                        .background(if (selected) Color(0xFF343044) else Color.Transparent)
+                                        .clickable {
+                                            if (useTouchpad != touchpad) {
+                                                feedback()
+                                                useTouchpad = touchpad
+                                            }
+                                        }
+                                        .padding(horizontal = 13.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        if (touchpad) Icons.Default.TouchApp else Icons.Default.Gamepad,
+                                        null, Modifier.size(18.dp),
+                                        tint = if (selected) White else SoftText
+                                    )
+                                    Text(
+                                        title, fontSize = 13.sp,
+                                        color = if (selected) White else SoftText
+                                    )
+                                }
+                            }
+                        }
+                        if (useTouchpad && !state.pointerConfirmed) {
+                            TextButton(
+                                onClick = {
+                                    feedback()
+                                    vm.confirmLgPointerWorks()
+                                },
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            ) {
+                                Text("Курсор работает на ТВ? Подтвердить", color = SoftText, fontSize = 12.sp)
+                            }
+                        }
+                    } else if (isLgWifi && state.selected?.isOnline == true) {
+                        Spacer(Modifier.height(10.dp))
+                        TextButton(
+                            enabled = !state.pointerChecking,
+                            onClick = vm::checkLgPointer,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text(
+                                if (state.pointerChecking) "Проверяем тачпад LG…"
+                                else "Проверить поддержку тачпада",
+                                color = SoftText, fontSize = 13.sp
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(19.dp))
@@ -242,14 +325,7 @@ fun RemoteScreen(vm: MainViewModel) {
                     }
                 }
 
-                if (state.mode == ControlMode.WIFI &&
-                    state.selected?.driverId == "lg.webos"
-                ) {
-                    Spacer(Modifier.height(14.dp))
-                    LgTouchpad(state, vm)
-                }
-
-                Spacer(Modifier.height(10.dp))
+                 Spacer(Modifier.height(10.dp))
                 MoreRemoteKeys(send)
             }
             if (state.mode == ControlMode.WIFI &&
@@ -263,6 +339,38 @@ fun RemoteScreen(vm: MainViewModel) {
                 }
             }
           }
+        }
+    }
+
+    if (showAppSettings) {
+        ModalBottomSheet(
+            onDismissRequest = { showAppSettings = false },
+            containerColor = Color(0xFF17171B),
+            contentColor = White
+        ) {
+            Column(
+                Modifier.fillMaxWidth().navigationBarsPadding()
+                    .padding(horizontal = 22.dp, vertical = 14.dp)
+            ) {
+                Text("Настройки приложения", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Виброотклик", color = White, fontSize = 16.sp)
+                        Spacer(Modifier.height(3.dp))
+                        Text("Короткая вибрация при нажатии кнопок пульта", color = SoftText, fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(
+                        checked = state.hapticEnabled,
+                        onCheckedChange = vm::setHapticEnabled
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+            }
         }
     }
 
