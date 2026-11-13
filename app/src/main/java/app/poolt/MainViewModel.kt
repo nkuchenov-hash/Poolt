@@ -134,8 +134,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 id = item.optString("id").ifBlank { "$driver@$address" },
                 name = item.optString("name").ifBlank { "TV · $address" },
                 type = runCatching { DeviceType.valueOf(item.optString("type", "TV")) }.getOrDefault(DeviceType.TV),
-                driverId = driver, brand = item.optString("brand").ifBlank { null },
-                model = item.optString("model").ifBlank { null }, address = address,
+                driverId = driver, brand = item.optString("brand").takeIf { it.isNotBlank() },
+                model = item.optString("model").takeIf { it.isNotBlank() }, address = address,
                 isOnline = false
             )
         }
