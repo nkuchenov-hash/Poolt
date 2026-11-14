@@ -41,6 +41,7 @@ data class MainUiState(
     val irQuery: String = "",
     val isLoadingIrCatalog: Boolean = false,
     val irTrialProfile: IrProfile? = null,
+    val irPowerTestSent: Boolean = false,
     val isTestingIr: Boolean = false,
     val irTestMessage: String = "",
     val devices: List<Device> = emptyList(),
@@ -322,7 +323,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearIrTrial() {
         _state.value = _state.value.copy(
-            irTrialProfile = null, irTestMessage = "", isTestingIr = false
+            irTrialProfile = null, irPowerTestSent = false,
+            irTestMessage = "", isTestingIr = false
         )
     }
 
@@ -330,6 +332,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun testIrProfile(profile: IrProfile) {
         _state.value = _state.value.copy(
             irTrialProfile = profile,
+            irPowerTestSent = false,
             irTestMessage = if (profile.commands.containsKey(RemoteCommand.POWER))
                 "Наведите телефон на телевизор и нажмите «Проверить питание»."
             else "В этом профиле нет кнопки питания. Попробуйте другой код.",
@@ -341,7 +344,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.isTestingIr) return
         viewModelScope.launch {
             _state.value = _state.value.copy(
-                irTrialProfile = null, isTestingIr = true,
+                irTrialProfile = null, irPowerTestSent = false, isTestingIr = true,
                 irTestMessage = "Загружаем код-набор…"
             )
             val result = withContext(Dispatchers.IO) { irRepository.fetchIrdbProfile(entry) }
@@ -363,6 +366,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val profile = _state.value.irTrialProfile ?: return
         val result = withContextSafeIrSend(profile, command)
         _state.value = _state.value.copy(
+            irPowerTestSent = if (command == RemoteCommand.POWER) result.isSuccess
+                else _state.value.irPowerTestSent,
             irTestMessage = if (result.isSuccess)
                 "Команда отправлена. Если телевизор отреагировал, подтвердите это ниже."
             else "Не удалось отправить: " + (result.exceptionOrNull()?.message ?: "нет кода")
