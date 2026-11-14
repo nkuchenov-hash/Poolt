@@ -19,6 +19,7 @@ class IrProfileRepository(private val context: Context) {
         private const val PREFS = "ir_catalog"
         private const val KEY_JSON = "json"
         private const val KEY_IRDB_INDEX = "irdb_index"
+        private const val KEY_DOWNLOADED = "downloaded_profiles"
     }
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -26,14 +27,18 @@ class IrProfileRepository(private val context: Context) {
     fun cached(): List<IrProfile> {
         val json = prefs.getString(KEY_JSON, null)
             ?: context.assets.open("ir_catalog.json").bufferedReader().use { it.readText() }
-        return parse(json)
+        val base = parse(json)
+        val extra = prefs.getString(KEY_DOWNLOADED, null)?.let { saved ->
+            runCatching { parse(saved) }.getOrDefault(emptyList())
+        }.orEmpty()
+        return (base + extra).distinctBy { it.id }
     }
 
     fun refresh(url: String = DEFAULT_URL): Result<List<IrProfile>> = runCatching {
         val json = fetchText(url)
         val profiles = parse(json)
         prefs.edit().putString(KEY_JSON, json).apply()
-        profiles
+        cached()
     }
 
     fun cachedIrdbIndex(): List<IrCatalogEntry> =
@@ -50,7 +55,35 @@ class IrProfileRepository(private val context: Context) {
             URLEncoder.encode(it, "UTF-8").replace("+", "%20")
         }
         val csv = fetchText(IRDB_CODES + encodedPath, 8000)
-        parseIrdbCsv(entry, csv)
+        val profile = parseIrdbCsv(entry, csv)
+        saveDownloadedProfile(profile)
+        profile
+    }
+
+    private fun saveDownloadedProfile(profile: IrProfile) {
+        val existing = prefs.getString(KEY_DOWNLOADED, null)
+            ?.let { runCatching { parse(it) }.getOrDefault(emptyList()) }.orEmpty()
+        val merged = (existing.filterNot { it.id == profile.id } + profile).takeLast(100)
+        val root = JSONObject()
+        root.put("schema", 1)
+        val profiles = org.json.JSONArray()
+        for (item in merged) {
+            val codes = JSONObject()
+            item.commands.forEach { (cmd, num) -> codes.put(cmd.name, num) }
+            profiles.put(
+                JSONObject().put("id", item.id)
+                    .put("brand", item.brand)
+                    .put("model", item.model)
+                    .put("deviceType", item.deviceType.name)
+                    .put("frequency", item.frequency)
+                    .put("protocol", item.protocol.name)
+                    .put("address", item.address)
+                    .put("subAddress", item.subAddress)
+                    .put("commands", codes)
+            )
+        }
+        root.put("profiles", profiles)
+        prefs.edit().putString(KEY_DOWNLOADED, root.toString()).apply()
     }
 
     private fun fetchText(url: String, timeout: Int = 5000): String {
@@ -143,8 +176,10 @@ class IrProfileRepository(private val context: Context) {
             .replace("_", " ")
             .replace("-", " ")
             .replace(Regex("\\s+"), " ")
+            .removePrefix("KEY ")
+            .trim()
         return when (n) {
-            "POWER", "POWER TOGGLE", "ON/OFF", "ON OFF" -> RemoteCommand.POWER
+            "POWER", "POWER TOGGLE", "POWER ON", "POWER OFF", "ON/OFF", "ON OFF" -> RemoteCommand.POWER
             "INPUT", "INPUT SOURCE", "SOURCE", "TV/VIDEO" -> RemoteCommand.SOURCE
             "SETTINGS", "SETUP" -> RemoteCommand.SETTINGS
             "HOME", "SMART HUB" -> RemoteCommand.HOME
@@ -152,16 +187,16 @@ class IrProfileRepository(private val context: Context) {
             "MENU", "TOOLS" -> RemoteCommand.MENU
             "GUIDE", "EPG" -> RemoteCommand.GUIDE
             "INFO", "DISPLAY" -> RemoteCommand.INFO
-            "UP", "CURSOR UP" -> RemoteCommand.UP
-            "DOWN", "CURSOR DOWN" -> RemoteCommand.DOWN
-            "LEFT", "CURSOR LEFT" -> RemoteCommand.LEFT
-            "RIGHT", "CURSOR RIGHT" -> RemoteCommand.RIGHT
+            "UP", "CURSOR UP", "ARROW UP" -> RemoteCommand.UP
+            "DOWN", "CURSOR DOWN", "ARROW DOWN" -> RemoteCommand.DOWN
+            "LEFT", "CURSOR LEFT", "ARROW LEFT" -> RemoteCommand.LEFT
+            "RIGHT", "CURSOR RIGHT", "ARROW RIGHT" -> RemoteCommand.RIGHT
             "OK", "ENTER", "SELECT" -> RemoteCommand.OK
-            "VOLUME +", "VOL +", "VOL+", "VOLUME UP" -> RemoteCommand.VOLUME_UP
-            "VOLUME -", "VOL -", "VOL-", "VOLUME DOWN" -> RemoteCommand.VOLUME_DOWN
+            "VOLUME +", "VOL +", "VOL+", "VOLUME UP", "VOLUMEUP" -> RemoteCommand.VOLUME_UP
+            "VOLUME -", "VOL -", "VOL-", "VOLUME DOWN", "VOLUMEDOWN" -> RemoteCommand.VOLUME_DOWN
             "MUTE" -> RemoteCommand.MUTE
-            "CHANNEL +", "CH +", "CH+", "CHANNEL UP", "CH NEXT" -> RemoteCommand.CHANNEL_UP
-            "CHANNEL -", "CH -", "CH-", "CHANNEL DOWN", "CH PREV" -> RemoteCommand.CHANNEL_DOWN
+            "CHANNEL +", "CH +", "CH+", "CHANNEL UP", "CHANNELUP", "CH NEXT" -> RemoteCommand.CHANNEL_UP
+            "CHANNEL -", "CH -", "CH-", "CHANNEL DOWN", "CHANNELDOWN", "CH PREV" -> RemoteCommand.CHANNEL_DOWN
             "PLAY", "PAUSE", "PLAY PAUSE" -> RemoteCommand.PLAY_PAUSE
             "REW", "REWIND" -> RemoteCommand.REWIND
             "FF", "FAST FORWARD", "FORWARD" -> RemoteCommand.FAST_FORWARD
