@@ -270,7 +270,7 @@ private fun EasyIrPicker(state: MainUiState, vm: MainViewModel) {
         Spacer(Modifier.height(8.dp))
         Text(state.irTestMessage, color = muted, fontSize = 13.sp)
     }
-    if (started && hasLoaded && !state.isTestingIr) {
+    if (started && hasLoaded && !state.isTestingIr && state.irPowerTestSent) {
         Spacer(Modifier.height(14.dp))
         Text("2. Телевизор включился или отреагировал?", fontSize = 16.sp)
         Spacer(Modifier.height(9.dp))
