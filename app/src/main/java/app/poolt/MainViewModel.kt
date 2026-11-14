@@ -337,7 +337,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun testIrEntry(entry: IrCatalogEntry) {
+    fun testIrEntry(entry: IrCatalogEntry, sendPowerAfterLoad: Boolean = false) {
         if (_state.value.isTestingIr) return
         viewModelScope.launch {
             _state.value = _state.value.copy(
@@ -355,6 +355,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val profile = result.getOrThrow()
             testIrProfile(profile)
+            if (sendPowerAfterLoad) sendIrTestCommand(RemoteCommand.POWER)
         }
     }
 
@@ -435,7 +436,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 pointerReady = false, pointerConfirmed = false,
                 pointerStatus = "", connectionMessage = "Подключение к " + device.name + "…"
             )
-            val result = driver.pair(device)
+            val result = kotlinx.coroutines.withTimeoutOrNull(12000L) {
+                driver.pair(device)
+            } ?: Result.failure(IllegalStateException(
+                "Телевизор не ответил за 12 секунд. Проверьте сеть и разрешение управления на ТВ."
+            ))
             if (_state.value.selected?.id != device.id) return@launch
             _state.value = _state.value.copy(
                 isPairing = false,
