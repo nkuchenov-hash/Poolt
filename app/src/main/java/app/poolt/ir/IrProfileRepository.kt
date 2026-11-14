@@ -16,6 +16,8 @@ class IrProfileRepository(private val context: Context) {
             "https://cdn.jsdelivr.net/gh/probonopd/irdb@master/codes/index"
         const val IRDB_CODES =
             "https://cdn.jsdelivr.net/gh/probonopd/irdb@master/codes/"
+        const val IRDB_RAW =
+            "https://raw.githubusercontent.com/probonopd/irdb/master/codes/"
         private const val PREFS = "ir_catalog"
         private const val KEY_JSON = "json"
         private const val KEY_IRDB_INDEX = "irdb_index"
@@ -49,16 +51,24 @@ class IrProfileRepository(private val context: Context) {
     }
 
     fun fetchIrdbIndex(): Result<List<IrCatalogEntry>> = runCatching {
-        val text = fetchText(IRDB_INDEX, 12000)
+        val text = runCatching { fetchText(IRDB_INDEX, 9000) }
+            .getOrElse { fetchText(IRDB_RAW + "index", 9000) }
         prefs.edit().putString(KEY_IRDB_INDEX, text).apply()
         parseIrdbIndex(text)
     }
 
     fun fetchIrdbProfile(entry: IrCatalogEntry): Result<IrProfile> = runCatching {
+        // Reuse already downloaded code sets without network calls.
+        val cached = prefs.getString(KEY_DOWNLOADED, null)
+            ?.let { runCatching { parse(it) }.getOrDefault(emptyList()) }
+            ?.firstOrNull { it.id == "irdb:" + entry.path }
+        if (cached != null) return@runCatching cached
+
         val encodedPath = entry.path.split("/").joinToString("/") {
             URLEncoder.encode(it, "UTF-8").replace("+", "%20")
         }
-        val csv = fetchText(IRDB_CODES + encodedPath, 8000)
+        val csv = runCatching { fetchText(IRDB_CODES + encodedPath, 8000) }
+            .getOrElse { fetchText(IRDB_RAW + encodedPath, 8000) }
         val profile = parseIrdbCsv(entry, csv)
         saveDownloadedProfile(profile)
         profile
