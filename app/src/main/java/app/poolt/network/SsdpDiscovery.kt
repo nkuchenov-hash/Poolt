@@ -2,6 +2,8 @@ package app.poolt.network
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import app.poolt.core.Device
 import app.poolt.core.DeviceType
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +29,13 @@ object SsdpDiscovery {
                 )
                 val found = linkedMapOf<String, Device>()
                 DatagramSocket().use { socket ->
+                    // Route discovery over Wi-Fi even when Android's default route is a VPN.
+                    val cm = context?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                    val wifiNetwork = cm?.allNetworks?.firstOrNull { net ->
+                        cm.getNetworkCapabilities(net)
+                            ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+                    }
+                    runCatching { wifiNetwork?.bindSocket(socket) }
                     socket.soTimeout = 250
                     socket.broadcast = true
                     val multicast = InetAddress.getByName("239.255.255.250")
