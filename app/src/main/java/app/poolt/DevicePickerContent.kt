@@ -64,7 +64,7 @@ private fun kindOf(type: DeviceType): String = when (type) {
 
 
 @Composable
-fun DevicePickerContent(state: MainUiState, vm: MainViewModel) {
+fun LegacyDevicePickerContent(state: MainUiState, vm: MainViewModel) {
     var wifi by remember { mutableStateOf(state.mode == ControlMode.WIFI) }
     var type by remember { mutableStateOf<String?>(null) }
     var brand by remember { mutableStateOf<String?>(null) }
