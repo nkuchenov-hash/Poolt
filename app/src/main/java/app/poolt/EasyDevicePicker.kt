@@ -351,7 +351,7 @@ private fun EasyWifiPicker(state: MainUiState, vm: MainViewModel) {
     ) {
         if (state.isScanning) {
             CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Color.White)
-        } else Icon(Icons.Default.WifiFind, null)
+        } else Icon(Icons.Default.Wifi, null)
         Spacer(Modifier.width(9.dp))
         Text(if (state.isScanning) "Ищем телевизоры…" else "Найти телевизор", fontSize = 16.sp)
     }
