@@ -441,10 +441,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 pointerReady = false, pointerConfirmed = false,
                 pointerStatus = "", connectionMessage = "Подключение к " + device.name + "…"
             )
-            val result = kotlinx.coroutines.withTimeoutOrNull(12000L) {
+            val result = kotlinx.coroutines.withTimeoutOrNull(35000L) {
                 driver.pair(device)
             } ?: Result.failure(IllegalStateException(
-                "Телевизор не ответил за 12 секунд. Проверьте сеть и разрешение управления на ТВ."
+                "Телевизор не ответил на запрос подключения. Проверьте сеть и разрешение управления на ТВ."
             ))
             if (_state.value.selected?.id != device.id) return@launch
             _state.value = _state.value.copy(
