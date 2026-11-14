@@ -12,6 +12,9 @@ import app.poolt.ir.IrCatalogEntry
 import app.poolt.ir.IrProfileRepository
 import app.poolt.ir.IrTransmitter
 import app.poolt.network.SsdpDiscovery
+import app.poolt.network.LanProbeDiscovery
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.content.Context
@@ -229,27 +232,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun scan() {
         if (_state.value.isScanning) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(isScanning = true,
-                wifiScanMessage = "Ищем телевизоры в локальной сети…")
-            val cm = getApplication<Application>()
-                .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            val network = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
-            val onLocalNetwork = network?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true ||
-                network?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true ||
-                network?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            val ctx = getApplication<Application>()
+            _state.value = _state.value.copy(
+                isScanning = true,
+                wifiScanMessage = "Ищем телевизоры в Wi-Fi. Проверяем SSDP и прямые подключения…",
+                devices = emptyList()
+            )
+            val hasWifi = LanProbeDiscovery.wifiLan(ctx) != null
+            if (!hasWifi) {
+                _state.value = _state.value.copy(
+                    isScanning = false, hasScannedWifi = true,
+                    wifiScanMessage = "Нет подключения к Wi-Fi. Подключите телефон к сети телевизора. VPN может мешать подключению."
+                )
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
-                runCatching { SsdpDiscovery.discover(getApplication()) }
+                runCatching {
+                    coroutineScope {
+                        val multicast = async { SsdpDiscovery.discover(ctx, 4900) }
+                        val ports = async { LanProbeDiscovery.discover(ctx) }
+                        val combined = multicast.await() + ports.await()
+                        combined.distinctBy { it.driverId to it.address }
+                            .sortedWith(compareBy<Device> { it.brand ?: "" }.thenBy { it.name })
+                    }
+                }
             }
             val devices = result.getOrDefault(emptyList())
-            val message = when {
-                result.isFailure -> "Ошибка поиска: " +
-                    (result.exceptionOrNull()?.localizedMessage ?: "проверьте соединение")
-                devices.isNotEmpty() -> "Найдено телевизоров: " + devices.size + ". Выберите устройство."
-                !onLocalNetwork -> "Подключите телефон к Wi-Fi сети телевизора и повторите поиск."
-                else -> "Телевизоры не найдены. Включите ТВ, убедитесь, что он и телефон в одной сети, и разрешите управление с телефона на ТВ."
+            val msg = when {
+                result.isFailure -> "Поиск не завершился: " +
+                    (result.exceptionOrNull()?.localizedMessage ?: "ошибка сети")
+                devices.isNotEmpty() ->
+                    "Найдено: ${devices.size}. Выберите телевизор и подтвердите подключение на его экране."
+                else -> "Телевизоры не найдены. Проверьте, что ТВ включён и в этой Wi-Fi сети. " +
+                    "Отключите гостевую сеть и VPN либо укажите IP телевизора ниже."
             }
-            _state.value = _state.value.copy(devices = devices, isScanning = false,
-                hasScannedWifi = true, wifiScanMessage = message, connectionMessage = message)
+            _state.value = _state.value.copy(
+                devices = devices, isScanning = false,
+                hasScannedWifi = true, wifiScanMessage = msg,
+                connectionMessage = msg
+            )
         }
     }
 
@@ -305,8 +326,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    // Loading a code set is NOT proof it controls the whole TV.
-    // The user must verify individual navigation/volume commands before saving.
+    // Power must be tested first: a switched-off TV cannot respond to volume keys.
+    fun testIrProfile(profile: IrProfile) {
+        _state.value = _state.value.copy(
+            irTrialProfile = profile,
+            irTestMessage = if (profile.commands.containsKey(RemoteCommand.POWER))
+                "Наведите телефон на телевизор и нажмите «Проверить питание»."
+            else "В этом профиле нет кнопки питания. Попробуйте другой код.",
+            isTestingIr = false
+        )
+    }
+
     fun testIrEntry(entry: IrCatalogEntry) {
         if (_state.value.isTestingIr) return
         viewModelScope.launch {
@@ -324,31 +354,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             val profile = result.getOrThrow()
-            val required = setOf(RemoteCommand.UP, RemoteCommand.DOWN,
-                RemoteCommand.LEFT, RemoteCommand.RIGHT,
-                RemoteCommand.OK, RemoteCommand.VOLUME_UP)
-            val missing = required.filterNot { profile.commands.containsKey(it) }
-            _state.value = _state.value.copy(
-                isTestingIr = false,
-                irTrialProfile = profile,
-                irTestMessage = if (missing.isEmpty()) {
-                    "Код загружен. Проверьте кнопки по очереди на телевизоре."
-                } else {
-                    "Этот код неполный: отсутствует " + missing.size +
-                        " основных команд. Рекомендуем следующий код."
-                }
-            )
+            testIrProfile(profile)
         }
     }
 
     fun sendIrTestCommand(command: RemoteCommand) {
         val profile = _state.value.irTrialProfile ?: return
-        val result = irTransmitter.send(profile, command)
+        val result = withContextSafeIrSend(profile, command)
         _state.value = _state.value.copy(
-            irTestMessage = if (result.isSuccess) "Команда отправлена. Проверьте реакцию телевизора."
-                else "Не удалось отправить: " + (result.exceptionOrNull()?.message ?: "нет кода")
+            irTestMessage = if (result.isSuccess)
+                "Команда отправлена. Если телевизор отреагировал, подтвердите это ниже."
+            else "Не удалось отправить: " + (result.exceptionOrNull()?.message ?: "нет кода")
         )
     }
+
+    private fun withContextSafeIrSend(profile: IrProfile, command: RemoteCommand): Result<Unit> =
+        irTransmitter.send(profile, command)
 
     fun confirmIrTrial() {
         val profile = _state.value.irTrialProfile ?: return
@@ -381,7 +402,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             pointerStatus = "",
             tvKeyboardFocused = false,
             keyboardMessage = "",
-            showDevicePicker = false
+            showDevicePicker = true
         )
         pairSelected()
     }
@@ -426,6 +447,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     persistSavedWifiDevices(updated)
                     updated
                 } else _state.value.savedWifiDevices,
+                showDevicePicker = !result.isSuccess,
+                wifiScanMessage = if (result.isSuccess)
+                    "Подключено к ${device.name}"
+                else "Не удалось подключиться к ${device.name}: " +
+                    (result.exceptionOrNull()?.localizedMessage ?: "нет ответа от телевизора"),
                 connectionMessage = if (result.isSuccess) "Wi-Fi подключено"
                     else (result.exceptionOrNull()?.message ?: "Ошибка подключения")
             )
