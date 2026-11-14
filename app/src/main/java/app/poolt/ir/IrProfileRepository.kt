@@ -41,8 +41,12 @@ class IrProfileRepository(private val context: Context) {
         cached()
     }
 
-    fun cachedIrdbIndex(): List<IrCatalogEntry> =
-        prefs.getString(KEY_IRDB_INDEX, null)?.let(::parseIrdbIndex).orEmpty()
+    fun cachedIrdbIndex(): List<IrCatalogEntry> {
+        val index = prefs.getString(KEY_IRDB_INDEX, null)
+            ?: context.assets.open("ir_codes_index.txt")
+                .bufferedReader().use { it.readText() }
+        return parseIrdbIndex(index)
+    }
 
     fun fetchIrdbIndex(): Result<List<IrCatalogEntry>> = runCatching {
         val text = fetchText(IRDB_INDEX, 12000)
