@@ -383,6 +383,49 @@ fun RemoteScreen(vm: MainViewModel) {
 }
 
 @Composable
+private fun BrandPowerMark() {
+    Canvas(Modifier.size(29.dp)) {
+        val width = 2.6.dp.toPx()
+        drawArc(
+            color = Red, startAngle = 205f, sweepAngle = 130f,
+            useCenter = false,
+            topLeft = Offset(size.width * .08f, size.height * .01f),
+            size = Size(size.width * .84f, size.height * .41f),
+            style = Stroke(width = width, cap = StrokeCap.Round)
+        )
+        drawArc(
+            color = Red, startAngle = -46f, sweepAngle = 272f,
+            useCenter = false,
+            topLeft = Offset(size.width * .14f, size.height * .27f),
+            size = Size(size.width * .72f, size.height * .70f),
+            style = Stroke(width = width, cap = StrokeCap.Round)
+        )
+        drawLine(
+            color = Red, start = Offset(size.width * .50f, size.height * .32f),
+            end = Offset(size.width * .50f, size.height * .67f),
+            strokeWidth = width, cap = StrokeCap.Round
+        )
+    }
+}
+
+@Composable
+private fun BrandHeaderAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(13.dp)
+    Box(
+        Modifier.size(43.dp)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(
+                Color(0xFF26242B), Color(0xFF151419)
+            )))
+            .border(1.dp, Color(0xFF51404A), shape)
+            .livePress(onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, label, modifier = Modifier.size(24.dp), tint = White)
+    }
+}
+
+@Composable
 private fun RemoteRoundKey(
     icon: ImageVector,
     contentDescription: String,
@@ -397,40 +440,41 @@ private fun RemoteRoundKey(
         animationSpec = androidx.compose.animation.core.spring(
             stiffness = androidx.compose.animation.core.Spring.StiffnessHigh
         ),
-        label = "round-physical-press"
+        label = "quick-key-press"
     )
+    val shape = RoundedCornerShape(20.dp)
     val colors = when {
-        isPower && pressed -> listOf(Color(0xFF9E1E32), Color(0xFFDA354C))
-        isPower -> listOf(Color(0xFFF54A60), Color(0xFFB91C37))
-        pressed -> listOf(Color(0xFF11151C), Color(0xFF373D47))
-        else -> listOf(Color(0xFF323844), Color(0xFF1A1D25))
+        isPower && pressed -> listOf(Color(0xFFA11128), Color(0xFFDA2A41))
+        isPower -> listOf(Color(0xFFEF3F53), Color(0xFFAC1129))
+        pressed -> listOf(Color(0xFF15151A), Color(0xFF44303B))
+        else -> listOf(Color(0xFF353039), Color(0xFF18171D))
     }
     Box(
         Modifier.size(diameter)
             .graphicsLayer {
-                scaleX = 1f - press * .06f
-                scaleY = 1f - press * .07f
+                scaleX = 1f - press * .055f
+                scaleY = 1f - press * .075f
                 translationY = press * 3.dp.toPx()
             }
             .shadow(
-                if (pressed) 1.dp else 7.dp,
-                CircleShape, false,
-                ambientColor = Color(0x80000000),
-                spotColor = Color.Black
+                elevation = if (pressed) 1.dp else 6.dp,
+                shape = shape,
+                ambientColor = if (isPower) Color(0x22C7243B) else Color(0x1A000000),
+                spotColor = if (isPower) Color(0x32E6263E) else Color(0x55000000)
             )
-            .clip(CircleShape)
+            .clip(shape)
             .background(Brush.verticalGradient(colors))
             .border(
-                1.2.dp,
-                if (isPower) Color(0xFFEF6B7E)
-                else if (pressed) Color(0xFF313944)
-                else Color(0xFF5E4650),
-                CircleShape
+                1.1.dp,
+                if (isPower) Color(0xFFEC6170)
+                else if (pressed) Color(0xFFAD4557)
+                else Color(0xFF68414C),
+                shape
             )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription, tint = White, modifier = Modifier.size(25.dp))
+        Icon(icon, contentDescription, tint = White, modifier = Modifier.size(27.dp))
     }
 }
 
@@ -448,32 +492,33 @@ private fun CompactActionKey(
         animationSpec = androidx.compose.animation.core.spring(
             stiffness = androidx.compose.animation.core.Spring.StiffnessHigh
         ),
-        label = "small-physical-press"
+        label = "small-key-depth"
     )
     val shape = RoundedCornerShape(20.dp)
     Column(
         modifier.height(79.dp)
             .graphicsLayer {
-                scaleX = 1f - depth * .045f
+                scaleX = 1f - depth * .05f
                 scaleY = 1f - depth * .065f
                 translationY = depth * 3.dp.toPx()
             }
-            .shadow(if (pressed) 1.dp else 5.dp, shape)
+            .shadow(3.dp, shape, ambientColor = Color(0x15000000),
+                spotColor = Color(0x26000000))
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    if (pressed) listOf(Color(0xFF151920), Color(0xFF343B47))
-                    else listOf(Color(0xFF303744), Color(0xFF171C26))
+                    if (pressed) listOf(Color(0xFF1A151C), Color(0xFF46212E))
+                    else listOf(Color(0xFF34303A), Color(0xFF17151C))
                 )
             )
-            .border(1.dp, if (pressed) Color(0xFFB33B52) else Color(0xFF614A55), shape)
+            .border(1.dp, if (pressed) Color(0xFFB5394F) else Color(0xFF63404D), shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Icon(icon, title, Modifier.size(25.dp), tint = White)
-        Spacer(Modifier.height(6.dp))
-        Text(title, fontSize = 12.sp, color = SoftText, maxLines = 1)
+        Spacer(Modifier.height(5.dp))
+        Text(title, fontSize = 13.sp, color = White, maxLines = 1)
     }
 }
 
@@ -489,10 +534,13 @@ private fun NeonRocker(
     val shape = RoundedCornerShape(25.dp)
     Column(
         modifier.height(166.dp)
-            .shadow(5.dp, shape)
+            .shadow(4.dp, shape, ambientColor = Color(0x13000000),
+                spotColor = Color(0x24000000))
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(Color(0xFF2B323F), Color(0xFF151A23))))
-            .border(1.dp, Color(0xFF654951), shape),
+            .background(Brush.verticalGradient(
+                listOf(Color(0xFF34303A), Color(0xFF17151C))
+            ))
+            .border(1.dp, Color(0xFF6B3A49), shape),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -502,7 +550,7 @@ private fun NeonRocker(
             onClick = onTop
         )
         Text(
-            title, color = Color(0xFFD3D8E1), fontSize = 12.sp,
+            title, color = White, fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold, maxLines = 1
         )
         RockerHalf(
@@ -522,16 +570,16 @@ private fun RockerHalf(icon: ImageVector, title: String, onClick: () -> Unit) {
         animationSpec = androidx.compose.animation.core.spring(
             stiffness = androidx.compose.animation.core.Spring.StiffnessHigh
         ),
-        label = "rocker-half-press"
+        label = "rocker-press"
     )
     Box(
         Modifier.fillMaxWidth().height(70.dp)
             .graphicsLayer {
                 scaleX = 1f - .04f * depth
-                scaleY = 1f - .045f * depth
-                translationY = 2.dp.toPx() * depth
+                scaleY = 1f - .048f * depth
+                translationY = 2.5.dp.toPx() * depth
             }
-            .background(if (pressed) Color(0xFF5A2533) else Color.Transparent)
+            .background(if (pressed) Color(0xFF51202E) else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -541,17 +589,17 @@ private fun RockerHalf(icon: ImageVector, title: String, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MoreRemoteKeys(onCommand: (RemoteCommand) -> Unit) {
+private fun MoreRemoteKeys(onCommand: (RemoteCommand) -> Unit, feedback: () -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Brush.verticalGradient(
-                listOf(Color(0xFF252029), Color(0xFF1D1B22))
-            ))
-            .border(1.dp, Color(0xFF49313D), RoundedCornerShape(14.dp))
-            .livePress { expanded = true }
-            .padding(vertical = 12.dp, horizontal = 15.dp),
+            .background(Brush.verticalGradient(listOf(
+                Color(0xFF2C2029), Color(0xFF171319)
+            )))
+            .border(1.dp, Color(0xFF6E3545), RoundedCornerShape(16.dp))
+            .livePress { feedback(); expanded = true }
+            .padding(vertical = 16.dp, horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Default.Dialpad, "Открыть цифровую клавиатуру", tint = White)
@@ -560,7 +608,7 @@ private fun MoreRemoteKeys(onCommand: (RemoteCommand) -> Unit) {
             "Цифры и медиакнопки",
             color = White, fontSize = 15.sp, modifier = Modifier.weight(1f)
         )
-        Icon(Icons.Default.KeyboardArrowUp, "Показать снизу", tint = SoftText)
+        Icon(Icons.Default.KeyboardArrowDown, "Открыть медиакнопки", tint = SoftText)
     }
     if (expanded) {
         ModalBottomSheet(
@@ -605,8 +653,8 @@ private fun RectKey(label: String, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier.height(47.dp)
             .clip(RoundedCornerShape(15.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF292930), Color(0xFF1A1A20))))
-            .border(1.dp, Color(0xFF393941), RoundedCornerShape(15.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xFF332C36), Color(0xFF18161C))))
+            .border(1.dp, Color(0xFF60404B), RoundedCornerShape(15.dp))
             .livePress(onClick),
         contentAlignment = Alignment.Center
     ) {
