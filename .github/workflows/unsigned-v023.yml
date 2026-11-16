@@ -1,4 +1,4 @@
-name: Pooltophone 0.23.0 APK validation
+name: Pooltophone 0.24.0 APK validation
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
       - name: Archive unsigned release for permanent local signing
         uses: actions/upload-artifact@v4
         with:
-          name: Pooltophone-0.23.0-UNSIGNED-input
+          name: Pooltophone-0.24.0-UNSIGNED-input
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 5
           if-no-files-found: error
