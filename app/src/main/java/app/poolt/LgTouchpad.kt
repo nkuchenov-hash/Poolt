@@ -58,10 +58,10 @@ fun LgTouchpadSurface(
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF202632), Color(0xFF191F2A), Color(0xFF0F131B))
+                    listOf(Color(0xFF2F2932), Color(0xFF1B171F), Color(0xFF101015))
                 )
             )
-            .border(1.dp, Color(0xFF404855), shape)
+            .border(1.dp, Color(0xFF76404E), shape)
             .pointerInput(deviceId) {
                 detectDragGestures(
                     onDragStart = { fingerDown = true },
