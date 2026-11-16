@@ -3,6 +3,7 @@ package app.poolt
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
@@ -24,11 +25,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -36,12 +44,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.poolt.core.RemoteCommand
 
-private val ScreenBg = Color(0xFF08090D)
+private val ScreenBg = Color(0xFF08080C)
 private val SurfaceTop = Color(0xFF29292F)
 private val SurfaceBottom = Color(0xFF141418)
 private val KeySurface = Color(0xFF1D1E23)
-private val SoftText = Color(0xFFA9ABB4)
-private val Red = Color(0xFFEF2945)
+private val SoftText = Color(0xFFB7B5BE)
+private val Red = Color(0xFFE6263E) // Matches the approved splash-screen wordmark
 private val White = Color(0xFFF6F6F8)
 private val Green = Color(0xFF35C873)
 
@@ -70,128 +78,126 @@ fun RemoteScreen(vm: MainViewModel) {
         containerColor = ScreenBg,
         topBar = {
             Column(
-                Modifier.fillMaxWidth()
-                    .background(ScreenBg)
+                Modifier.fillMaxWidth().background(ScreenBg)
                     .statusBarsPadding()
-                    .padding(start = 18.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)
+                    .padding(start = 19.dp, end = 15.dp, top = 11.dp, bottom = 12.dp)
             ) {
                 Row(
-                    Modifier.fillMaxWidth().height(43.dp),
+                    Modifier.fillMaxWidth().height(46.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        Modifier.width(3.dp).height(25.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Red)
-                    )
+                    BrandPowerMark()
                     Spacer(Modifier.width(11.dp))
                     Text(
-                        "Пультофон",
-                        fontSize = 21.sp,
-                        color = White,
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = Red)) { append("Пульт") }
+                            withStyle(SpanStyle(color = White)) { append("офон") }
+                        },
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
                     )
                     Spacer(Modifier.weight(1f))
-                    IconButton(
-                        onClick = { feedback(); vm.openPicker() },
-                        modifier = Modifier.size(43.dp)
-                    ) {
-                        Icon(Icons.Default.Add, "Добавить телевизор",
-                            Modifier.size(25.dp), tint = White)
+                    BrandHeaderAction(Icons.Default.Add, "Добавить телевизор") {
+                        feedback()
+                        vm.openPicker()
                     }
-                    Spacer(Modifier.width(4.dp))
-                    IconButton(
-                        onClick = { feedback(); showAppSettings = true },
-                        modifier = Modifier.size(43.dp)
-                    ) {
-                        Icon(Icons.Default.Settings, "Настройки",
-                            Modifier.size(23.dp), tint = SoftText)
+                    Spacer(Modifier.width(9.dp))
+                    BrandHeaderAction(Icons.Default.Settings, "Настройки") {
+                        feedback()
+                        showAppSettings = true
                     }
                 }
-                Spacer(Modifier.height(9.dp))
+                Spacer(Modifier.height(13.dp))
+                val connected = when (state.mode) {
+                    ControlMode.IR -> state.irVerified &&
+                        state.selectedIrProfile != null && state.irAvailable
+                    ControlMode.WIFI -> state.selected?.isOnline == true
+                }
+                val selectedName = when (state.mode) {
+                    ControlMode.IR -> state.selectedIrProfile?.let { "${it.brand} · ИК" }
+                    ControlMode.WIFI -> state.selected?.let {
+                        it.brand?.let { brand ->
+                            if (it.name.startsWith(brand, true)) it.name
+                            else "$brand · ${it.name}"
+                        } ?: it.name
+                    }
+                } ?: "Выбрать телевизор"
                 Row(
-                    Modifier.fillMaxWidth()
-                        .heightIn(min = 34.dp)
-                        .clip(RoundedCornerShape(11.dp))
+                    Modifier.widthIn(max = 300.dp)
+                        .heightIn(min = 41.dp)
+                        .clip(RoundedCornerShape(21.dp))
+                        .background(Brush.verticalGradient(listOf(
+                            Color(0xFF272027), Color(0xFF17141A)
+                        )))
+                        .border(1.dp, Color(0xFF5E404A), RoundedCornerShape(21.dp))
                         .clickable { feedback(); vm.openPicker() }
-                        .padding(start = 14.dp, end = 11.dp, top = 5.dp, bottom = 5.dp),
+                        .padding(start = 14.dp, end = 11.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val connected = when (state.mode) {
-                        ControlMode.IR -> state.irVerified &&
-                            state.selectedIrProfile != null && state.irAvailable
-                        ControlMode.WIFI -> state.selected?.isOnline == true
-                    }
                     Box(
                         Modifier.size(8.dp).clip(CircleShape)
-                            .background(if (connected) Green else Red.copy(alpha = .72f))
+                            .background(if (connected) Green else Red)
                     )
                     Spacer(Modifier.width(9.dp))
-                    val name = when (state.mode) {
-                        ControlMode.IR -> state.selectedIrProfile?.let { "${it.brand} · ИК" }
-                        ControlMode.WIFI -> state.selected?.let {
-                            it.brand?.let { brand ->
-                                if (it.name.startsWith(brand, true)) it.name
-                                else "$brand · ${it.name}"
-                            } ?: it.name
-                        }
-                    } ?: "Выбрать телевизор"
                     Text(
-                        name, color = SoftText, fontSize = 14.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        selectedName,
+                        modifier = Modifier.weight(1f, fill = false),
+                        color = White,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.width(6.dp))
-                    Icon(
-                        Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Сменить телевизор",
-                        modifier = Modifier.size(20.dp),
-                        tint = SoftText
-                    )
+                    Icon(Icons.Default.KeyboardArrowDown, "Выбрать телевизор",
+                        modifier = Modifier.size(20.dp), tint = SoftText)
                 }
             }
         }
     ) { scaffoldPadding ->
         BoxWithConstraints(
-            Modifier.fillMaxSize().padding(scaffoldPadding).navigationBarsPadding()
+            Modifier.fillMaxSize().padding(scaffoldPadding)
+                .navigationBarsPadding()
+                .background(Brush.verticalGradient(listOf(
+                    ScreenBg, Color(0xFF0B090E), Color(0xFF11090E)
+                )))
         ) {
-          val minimumRemoteHeight = (maxHeight - 18.dp).coerceAtLeast(625.dp)
+          val minimumRemoteHeight = (maxHeight - 10.dp).coerceAtLeast(648.dp)
           Column(
               Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                  .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                  .padding(start = 15.dp, end = 15.dp, bottom = 8.dp),
               horizontalAlignment = Alignment.CenterHorizontally
           ) {
             // Primary controls receive most visual space. Secondary actions
             // are intentionally separate from the navigation ring.
             Column(
                 Modifier.fillMaxWidth().heightIn(min = minimumRemoteHeight)
-                    .padding(horizontal = 4.dp, vertical = 14.dp),
+                    .padding(horizontal = 1.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 9.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 5.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RemoteRoundKey(Icons.Default.PowerSettingsNew, "Питание", true, 56.dp) {
+                    RemoteRoundKey(Icons.Default.PowerSettingsNew, "Питание", true, 64.dp) {
                         send(RemoteCommand.POWER)
                     }
-                    RemoteRoundKey(Icons.Default.Home, "Главная", false, 56.dp) {
+                    RemoteRoundKey(Icons.Default.Home, "Главная", false, 64.dp) {
                         send(RemoteCommand.HOME)
                     }
-                    RemoteRoundKey(Icons.Default.Keyboard, "Клавиатура для ввода текста", false, 56.dp) {
+                    RemoteRoundKey(Icons.Default.Keyboard, "Клавиатура для ввода текста", false, 64.dp) {
                         feedback()
                         keyboardOpen = true
                     }
-                    RemoteRoundKey(Icons.Default.Input, "Источник", false, 56.dp) {
+                    RemoteRoundKey(Icons.Default.Input, "Источник", false, 64.dp) {
                         send(RemoteCommand.SOURCE)
                     }
                 }
 
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    val dialSize = maxWidth.coerceAtMost(258.dp)
+                    val dialSize = maxWidth.coerceAtMost(280.dp)
                     val touchWidth = maxWidth.coerceAtMost(420.dp)
                     Column(
                         Modifier.fillMaxWidth(),
@@ -214,11 +220,13 @@ fun RemoteScreen(vm: MainViewModel) {
                             PhysicalCompassPad(dialSize, send)
                         }
 
-                        Spacer(Modifier.height(13.dp))
+                        Spacer(Modifier.height(12.dp))
                         Row(
-                            Modifier.clip(RoundedCornerShape(20.dp))
-                                .background(Color(0xFF21191F))
-                                .border(1.dp, Color(0xFF87404E), RoundedCornerShape(20.dp))
+                            Modifier.clip(RoundedCornerShape(23.dp))
+                                .background(Brush.verticalGradient(listOf(
+                                    Color(0xFF25191E), Color(0xFF151217)
+                                )))
+                                .border(1.dp, Color(0xFF7B3644), RoundedCornerShape(23.dp))
                                 .padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -227,13 +235,17 @@ fun RemoteScreen(vm: MainViewModel) {
                                 .forEach { (touchpad, title) ->
                                     val active = useTouchpad == touchpad
                                     Row(
-                                        Modifier.clip(RoundedCornerShape(16.dp))
-                                            .background(if (active) Color(0xFF793041) else Color.Transparent)
+                                        Modifier.clip(RoundedCornerShape(19.dp))
+                                            .background(if (active) Brush.verticalGradient(
+                                                listOf(Color(0xFFDC3048), Color(0xFF9F182F))
+                                            ) else Brush.verticalGradient(
+                                                listOf(Color.Transparent, Color.Transparent)
+                                            ))
                                             .livePress {
                                                 if (useTouchpad != touchpad) feedback()
                                                 useTouchpad = touchpad
                                             }
-                                            .padding(horizontal = 13.dp, vertical = 11.dp),
+                                            .padding(horizontal = 15.dp, vertical = 12.dp),
                                         horizontalArrangement = Arrangement.spacedBy(7.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -257,10 +269,10 @@ fun RemoteScreen(vm: MainViewModel) {
                 }
 
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    val rockerWidth = if (maxWidth < 325.dp) 68.dp else 78.dp
+                    val rockerWidth = if (maxWidth < 325.dp) 66.dp else 76.dp
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(11.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         NeonRocker(
@@ -306,7 +318,7 @@ fun RemoteScreen(vm: MainViewModel) {
                     }
                 }
 
-                MoreRemoteKeys(send)
+                MoreRemoteKeys(send, feedback)
             }
             if (state.mode == ControlMode.WIFI &&
                 state.selected != null && state.selected?.isOnline != true
