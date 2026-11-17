@@ -52,20 +52,20 @@ private val Light = Color(0xFFECEEF4)
 fun PhysicalCompassPad(diameter: Dp, onCommand: (RemoteCommand) -> Unit) {
     Box(
         Modifier.size(diameter)
-            .shadow(10.dp, CircleShape, ambientColor = Color(0x274E1122), spotColor = Color(0x25E6263E))
+            .shadow(12.dp, CircleShape, ambientColor = Color(0x16000000), spotColor = Color(0x1D9A2239))
             .clip(CircleShape)
             .background(
                 Brush.radialGradient(
-                    listOf(Color(0xFF353038), Color(0xFF24212A), Color(0xFF111116))
+                    listOf(Color(0xFF4A444E), Color(0xFF2C2832), Color(0xFF131219))
                 )
             )
             .border(
-                1.9.dp,
+                1.8.dp,
                 Brush.sweepGradient(
                     listOf(
-                        Color(0xFFD3475B), Color(0xFF66303D),
-                        Color(0xFFB8354C), Color(0xFF532D3A),
-                        Color(0xFFD3475B)
+                        Color(0xFF994053), Color(0xFF472A36),
+                        Color(0xFF784352), Color(0xFF94808D),
+                        Color(0xFFAA394E)
                     )
                 ),
                 CircleShape
@@ -82,10 +82,24 @@ fun PhysicalCompassPad(diameter: Dp, onCommand: (RemoteCommand) -> Unit) {
                 ),
                 radius = rad
             )
-            drawCircle(Color(0xFFE2475B).copy(alpha = .35f),
-                radius = rad - 3.dp.toPx(), style = Stroke(width = 1.dp.toPx()))
-            drawCircle(Color(0xFF6D2434).copy(alpha = .64f),
-                radius = rad * .60f, style = Stroke(width = 1.5.dp.toPx()))
+            drawCircle(
+                Color(0xFF9F5160).copy(alpha = .27f),
+                radius = rad - 3.dp.toPx(),
+                style = Stroke(width = 1.dp.toPx())
+            )
+            // The top rim catches reflected light; lower rim keeps the brand red.
+            drawArc(
+                color = Color(0xFFCAC0CB).copy(alpha = .40f),
+                startAngle = 203f, sweepAngle = 126f,
+                useCenter = false,
+                topLeft = Offset(3.dp.toPx(), 3.dp.toPx()),
+                size = androidx.compose.ui.geometry.Size(
+                    size.width - 6.dp.toPx(), size.height - 6.dp.toPx()
+                ),
+                style = Stroke(width = 1.3.dp.toPx(), cap = StrokeCap.Round)
+            )
+            drawCircle(Color(0xFF4D2330).copy(alpha = .62f),
+                radius = rad * .60f, style = Stroke(width = 1.8.dp.toPx()))
             for (degrees in listOf(45.0, 135.0, 225.0, 315.0)) {
                 val r = degrees * Math.PI / 180.0
                 val direction = Offset(cos(r).toFloat(), sin(r).toFloat())
@@ -151,13 +165,13 @@ fun PhysicalCompassPad(diameter: Dp, onCommand: (RemoteCommand) -> Unit) {
                 .clip(CircleShape)
                 .background(
                     Brush.verticalGradient(
-                        if (pressed) listOf(Color(0xFF3C1421), Color(0xFF141116))
-                        else listOf(Color(0xFF39232D), Color(0xFF111116))
+                        if (pressed) listOf(Color(0xFF26111B), Color(0xFF101015))
+                        else listOf(Color(0xFF51404B), Color(0xFF302431), Color(0xFF121116))
                     )
                 )
                 .border(
                     1.5.dp,
-                    if (pressed) Color(0xFFEE5068) else Color(0xFFB53E54),
+                    if (pressed) Color(0xFFD75063) else Color(0xFFAE4556),
                     CircleShape
                 )
                 .clickable(
@@ -199,7 +213,7 @@ private fun PhysicalDirection(
             .clip(CircleShape)
             .background(
                 if (pressed) Brush.radialGradient(
-                    listOf(Color(0xFF622334), Color(0x00252A34))
+                    listOf(Color(0xFF4A2C37), Color(0x00252A34))
                 ) else Brush.radialGradient(
                     listOf(Color(0x00242A34), Color(0x00242A34))
                 )
