@@ -42,7 +42,7 @@ object SsdpDiscovery {
                     // Two spaced rounds: several LG webOS models answer only
                     // a later search packet after waking their SSDP service.
                     val wifiLan = context?.let { LanProbeDiscovery.wifiLan(it) }
-                    val broadcastAddress = wifiLan?.ip?.address?.takeIf { wifiLan.prefix >= 24 }
+                    val broadcastAddress = wifiLan?.takeIf { it.prefix >= 24 }?.ip?.address
                         ?.let { bytes ->
                             val octets = bytes.map { it.toInt() and 0xFF }
                             InetAddress.getByName("${octets[0]}.${octets[1]}.${octets[2]}.255")
