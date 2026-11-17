@@ -55,6 +55,7 @@ data class MainUiState(
     ),
     val isScanning: Boolean = false,
     val wifiScanMessage: String = "",
+    val wifiSearchDetails: String = "",
     val hasScannedWifi: Boolean = false,
     val isPairing: Boolean = false,
     val pointerChecking: Boolean = false,
@@ -234,61 +235,92 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.isScanning) return
         viewModelScope.launch {
             val ctx = getApplication<Application>()
-            // Never gate SSDP on LinkProperties: Android/VPNs can hide the
-            // Wi-Fi network even when multicast discovery works.
             _state.value = _state.value.copy(
                 isScanning = true,
-                wifiScanMessage = "Ищем телевизоры в сети…",
-                hasScannedWifi = false
+                hasScannedWifi = false,
+                devices = emptyList(),
+                wifiScanMessage = "Ищем телевизоры LG и другие Smart TV…",
+                wifiSearchDetails = ""
             )
 
-            val saved = _state.value.savedWifiDevices
-            val discovered = linkedMapOf<Pair<String, String?>, Device>()
-            fun addDevices(items: List<Device>) {
-                for (item in items) discovered[item.driverId to item.address] = item
-                _state.value = _state.value.copy(
-                    devices = discovered.values.toList(),
-                    wifiScanMessage = if (discovered.isEmpty())
-                        "Проверяем телевизоры в локальной сети…"
-                    else "Найдено: ${discovered.size}. Нажмите на телевизор для подключения."
-                )
-            }
+            val wifi = LanProbeDiscovery.wifiLan(ctx)
+            val found = linkedMapOf<Pair<String, String?>, Device>()
+            var ssdpCount = 0
+            var directCount = 0
+            var ssdpFailure: String? = null
+            var directFailure: String? = null
 
-            // First show actual SSDP matches quickly, without waiting for a full
-            // subnet sweep. Keep partial results even if a later stage fails.
-            val multicast = withContext(Dispatchers.IO) {
-                runCatching { SsdpDiscovery.discover(ctx, 4800) }.getOrDefault(emptyList())
-            }
-            addDevices(multicast)
-
-            // Recover known televisions from previous successful pairing
-            // without mistaking saved entries for currently discovered ones.
-            if (saved.isNotEmpty()) {
-                _state.value = _state.value.copy(
-                    wifiScanMessage = if (multicast.isEmpty())
-                        "Проверяем сеть. Сохранённые устройства доступны выше."
-                    else "Телевизоры найдены. Проверяем остальные адреса…"
-                )
-            }
-
-            val direct = withContext(Dispatchers.IO) {
-                runCatching {
-                    kotlinx.coroutines.withTimeout(13000L) {
-                        LanProbeDiscovery.discover(ctx)
+            fun accept(devices: List<Device>) {
+                synchronized(found) {
+                    for (device in devices) {
+                        found[device.driverId to device.address] = device
                     }
-                }.getOrDefault(emptyList())
+                    val current = found.values
+                        .sortedWith(compareBy<Device> { it.brand != "LG" }.thenBy { it.name })
+                    _state.value = _state.value.copy(
+                        devices = current,
+                        wifiScanMessage = if (current.isNotEmpty()) {
+                            "Найдено ${current.size}. Можно выбрать телевизор."
+                        } else "Ищем телевизоры в сети…"
+                    )
+                }
             }
-            addDevices(direct)
-            val all = discovered.values
-                .sortedWith(compareBy<Device> { it.brand != "LG" }.thenBy { it.name })
+
+            // Run the original working, unbound SSDP scan independently from
+            // TCP probing. A VPN or inaccessible Wi-Fi link must never prevent
+            // the SSDP results from being displayed.
+            kotlinx.coroutines.supervisorScope {
+                val ssdp = async(Dispatchers.IO) {
+                    val result = runCatching { SsdpDiscovery.discover(ctx, 5300) }
+                    val devices = result.getOrDefault(emptyList())
+                    ssdpCount = devices.size
+                    ssdpFailure = result.exceptionOrNull()?.javaClass?.simpleName
+                    accept(devices)
+                }
+                val direct = async(Dispatchers.IO) {
+                    val result = runCatching {
+                        kotlinx.coroutines.withTimeout(16000L) {
+                            LanProbeDiscovery.discover(ctx) { device ->
+                                // Preserve individual hits even if the sweep
+                                // times out or another probe fails.
+                                accept(listOf(device))
+                            }
+                        }
+                    }
+                    directCount = result.getOrDefault(emptyList()).size
+                    directFailure = result.exceptionOrNull()?.javaClass?.simpleName
+                    accept(result.getOrDefault(emptyList()))
+                }
+                ssdp.await()
+                direct.await()
+            }
+
+            val all = synchronized(found) { found.values.toList() }
+            val diagnostic = buildString {
+                append("Поиск Wi-Fi: SSDP=")
+                append(ssdpCount)
+                append(", прямое подключение=")
+                append(directCount)
+                append(", итого=")
+                append(all.size)
+                append(". ")
+                append(if (wifi != null) "Интерфейс: ${wifi.ip.hostAddress}/${wifi.prefix}."
+                    else "Android не предоставил адрес Wi-Fi.")
+                ssdpFailure?.let { append(" SSDP: $it.") }
+                directFailure?.let { append(" Сканирование портов: $it.") }
+            }
             val message = if (all.isNotEmpty()) {
                 "Найдено ${all.size}. Выберите телевизор."
             } else {
-                "Не удалось обнаружить ТВ. Попробуйте подключиться по IP."
+                "Телевизор не обнаружен. Проверьте Wi-Fi или откройте диагностику ниже."
             }
             _state.value = _state.value.copy(
-                devices = all, isScanning = false, hasScannedWifi = true,
-                wifiScanMessage = message, connectionMessage = message
+                devices = all,
+                isScanning = false,
+                hasScannedWifi = true,
+                wifiScanMessage = message,
+                wifiSearchDetails = diagnostic,
+                connectionMessage = message
             )
         }
     }
