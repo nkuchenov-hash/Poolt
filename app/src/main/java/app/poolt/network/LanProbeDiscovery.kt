@@ -39,7 +39,10 @@ object LanProbeDiscovery {
         return null
     }
 
-    suspend fun discover(context: Context): List<Device> = withContext(Dispatchers.IO) {
+    suspend fun discover(
+        context: Context,
+        onFound: (Device) -> Unit = {}
+    ): List<Device> = withContext(Dispatchers.IO) {
         val lan = wifiLan(context) ?: return@withContext emptyList()
         val own = lan.ip.address.map { it.toInt() and 0xff }
         if (own.size != 4 || own[0] == 127 || own[0] == 169 && own[1] == 254) {
@@ -52,7 +55,9 @@ object LanProbeDiscovery {
                 async(Dispatchers.IO) {
                     gate.withPermit {
                         val ip = prefix + last
-                        probeHost(lan.network, ip)
+                        val device = probeHost(lan.network, ip)
+                        if (device != null) onFound(device)
+                        device
                     }
                 }
             }.awaitAll().filterNotNull()
