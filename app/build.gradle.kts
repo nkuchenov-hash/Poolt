@@ -17,8 +17,8 @@ android {
         applicationId = "app.poolt"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "0.24.0"
+        versionCode = 27
+        versionName = "0.25.0"
     }
     signingConfigs {
         if (!permanentKeystore.isNullOrBlank()) {
