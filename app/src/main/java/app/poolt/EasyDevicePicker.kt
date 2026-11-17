@@ -213,6 +213,7 @@ private fun PickerPrimary(
 @Composable
 private fun EasyWifiPicker(state: MainUiState, vm: MainViewModel) {
     var manualOpen by rememberSaveable { mutableStateOf(false) }
+    var detailsOpen by rememberSaveable { mutableStateOf(false) }
     var manualBrand by rememberSaveable { mutableStateOf("LG") }
 
     LaunchedEffect(Unit) {
@@ -287,6 +288,26 @@ private fun EasyWifiPicker(state: MainUiState, vm: MainViewModel) {
         Spacer(Modifier.height(9.dp))
         Text("ТВ не ответил. Проверьте его запрос на подключение.",
             fontSize = 15.sp, color = Color(0xFFFFB8A7))
+    }
+
+    if (!state.isScanning && state.hasScannedWifi &&
+        state.devices.isEmpty() && state.wifiSearchDetails.isNotBlank()) {
+        TextButton(onClick = { detailsOpen = !detailsOpen }) {
+            Text(
+                if (detailsOpen) "Скрыть диагностику" else "Почему ТВ не найден?",
+                fontSize = 14.sp, color = muted
+            )
+        }
+        if (detailsOpen) {
+            Text(
+                state.wifiSearchDetails, fontSize = 13.sp,
+                color = muted, lineHeight = 19.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(tile, RoundedCornerShape(13.dp))
+                    .padding(13.dp)
+            )
+        }
     }
 
     Spacer(Modifier.height(24.dp))
