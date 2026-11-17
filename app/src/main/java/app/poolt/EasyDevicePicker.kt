@@ -276,7 +276,7 @@ private fun EasyWifiPicker(state: MainUiState, vm: MainViewModel) {
                 .padding(15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.InfoOutline, null, tint = muted)
+            Icon(Icons.Default.Info, null, tint = muted)
             Spacer(Modifier.width(12.dp))
             Text("Телевизор пока не найден.",
                 fontSize = 15.sp, color = muted)
