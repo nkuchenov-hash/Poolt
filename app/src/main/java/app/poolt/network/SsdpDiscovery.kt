@@ -39,18 +39,40 @@ object SsdpDiscovery {
                     socket.soTimeout = 250
                     socket.broadcast = true
                     val multicast = InetAddress.getByName("239.255.255.250")
-                    targets.forEach { st ->
-                        val request = (
-                            "M-SEARCH * HTTP/1.1\r\n" +
+                    // Two spaced rounds: several LG webOS models answer only
+                    // a later search packet after waking their SSDP service.
+                    val wifiLan = context?.let { LanProbeDiscovery.wifiLan(it) }
+                    val broadcastAddress = wifiLan?.ip?.address?.takeIf { wifiLan.prefix >= 24 }
+                        ?.let { bytes ->
+                            val octets = bytes.map { it.toInt() and 0xFF }
+                            InetAddress.getByName("${octets[0]}.${octets[1]}.${octets[2]}.255")
+                        }
+                    val requests = targets.map { st ->
+                        ("M-SEARCH * HTTP/1.1\r\n" +
                             "HOST: 239.255.255.250:1900\r\n" +
                             "MAN: \"ssdp:discover\"\r\n" +
                             "MX: 2\r\n" +
-                            "ST: $st\r\n\r\n"
-                        ).toByteArray(Charsets.UTF_8)
-                        runCatching { socket.send(DatagramPacket(request, request.size, multicast, 1900)) }
+                            "ST: $st\r\n\r\n").toByteArray(Charsets.UTF_8)
                     }
+                    fun sendQueries() {
+                        requests.forEach { request ->
+                            runCatching { socket.send(DatagramPacket(request, request.size, multicast, 1900)) }
+                        }
+                        // Some routers forward broadcast but suppress multicast.
+                        broadcastAddress?.let { address ->
+                            requests.firstOrNull()?.let { request ->
+                                runCatching { socket.send(DatagramPacket(request, request.size, address, 1900)) }
+                            }
+                        }
+                    }
+                    sendQueries()
                     val deadline = System.currentTimeMillis() + timeoutMs
+                    var retried = false
                     while (System.currentTimeMillis() < deadline) {
+                        if (!retried && System.currentTimeMillis() >= deadline - timeoutMs / 2) {
+                            retried = true
+                            sendQueries()
+                        }
                         try {
                             val data = ByteArray(8192)
                             val packet = DatagramPacket(data, data.size)
@@ -60,7 +82,9 @@ object SsdpDiscovery {
                                 .joinToString(" ") { headers[it].orEmpty() }.lowercase()
                             val driverId = when {
                                 marker.contains("roku") -> "roku.ecp"
-                                marker.contains("webos") || marker.contains("lge") || marker.contains("lgsmarttv") -> "lg.webos"
+                                marker.contains("webos") || marker.contains("lge") ||
+                                    marker.contains("lgsmarttv") || marker.contains("lg smart tv") ||
+                                    marker.contains("lg electronics") || marker.contains("netcast") -> "lg.webos"
                                 marker.contains("samsung") || marker.contains("sec:main") -> "samsung.smarttv"
                                 else -> null
                             } ?: continue
