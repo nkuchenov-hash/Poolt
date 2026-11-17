@@ -162,7 +162,7 @@ fun RemoteScreen(vm: MainViewModel) {
                     ScreenBg, Color(0xFF0B090E), Color(0xFF11090E)
                 )))
         ) {
-          val minimumRemoteHeight = (maxHeight - 10.dp).coerceAtLeast(648.dp)
+          val minimumRemoteHeight = (maxHeight - 8.dp).coerceAtLeast(740.dp)
           Column(
               Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                   .padding(start = 15.dp, end = 15.dp, bottom = 8.dp),
@@ -172,7 +172,7 @@ fun RemoteScreen(vm: MainViewModel) {
             // are intentionally separate from the navigation ring.
             Column(
                 Modifier.fillMaxWidth().heightIn(min = minimumRemoteHeight)
-                    .padding(horizontal = 1.dp, vertical = 12.dp),
+                    .padding(horizontal = 1.dp, vertical = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
@@ -220,13 +220,15 @@ fun RemoteScreen(vm: MainViewModel) {
                             PhysicalCompassPad(dialSize, send)
                         }
 
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(24.dp))
                         Row(
                             Modifier.clip(RoundedCornerShape(23.dp))
                                 .background(Brush.verticalGradient(listOf(
-                                    Color(0xFF25191E), Color(0xFF151217)
+                                    Color(0xFF30252D), Color(0xFF18141B)
                                 )))
-                                .border(1.dp, Color(0xFF7B3644), RoundedCornerShape(23.dp))
+                                .border(1.dp, Brush.verticalGradient(
+                                    listOf(Color(0xFF8B5362), Color(0xFF3D2430))
+                                ), RoundedCornerShape(23.dp))
                                 .padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -237,7 +239,7 @@ fun RemoteScreen(vm: MainViewModel) {
                                     Row(
                                         Modifier.clip(RoundedCornerShape(19.dp))
                                             .background(if (active) Brush.verticalGradient(
-                                                listOf(Color(0xFFDC3048), Color(0xFF9F182F))
+                                                listOf(Color(0xFFE44459), Color(0xFFB21C34), Color(0xFF841127))
                                             ) else Brush.verticalGradient(
                                                 listOf(Color.Transparent, Color.Transparent)
                                             ))
@@ -444,10 +446,10 @@ private fun RemoteRoundKey(
     )
     val shape = RoundedCornerShape(20.dp)
     val colors = when {
-        isPower && pressed -> listOf(Color(0xFFA11128), Color(0xFFDA2A41))
-        isPower -> listOf(Color(0xFFEF3F53), Color(0xFFAC1129))
-        pressed -> listOf(Color(0xFF15151A), Color(0xFF44303B))
-        else -> listOf(Color(0xFF353039), Color(0xFF18171D))
+        isPower && pressed -> listOf(Color(0xFF9D192C), Color(0xFFBD1D38), Color(0xFF7C1024))
+        isPower -> listOf(Color(0xFFFF6876), Color(0xFFDC2644), Color(0xFF92132A))
+        pressed -> listOf(Color(0xFF1A1921), Color(0xFF2A1D26), Color(0xFF141219))
+        else -> listOf(Color(0xFF504955), Color(0xFF2F2A35), Color(0xFF14141B))
     }
     Box(
         Modifier.size(diameter)
@@ -459,16 +461,20 @@ private fun RemoteRoundKey(
             .shadow(
                 elevation = if (pressed) 1.dp else 6.dp,
                 shape = shape,
-                ambientColor = if (isPower) Color(0x22C7243B) else Color(0x1A000000),
-                spotColor = if (isPower) Color(0x32E6263E) else Color(0x55000000)
+                ambientColor = if (isPower) Color(0x1DC7243B) else Color(0x25000000),
+                spotColor = if (isPower) Color(0x22E6263E) else Color(0x5B000000)
             )
             .clip(shape)
             .background(Brush.verticalGradient(colors))
+            .background(Brush.radialGradient(
+                listOf(Color(0x1FFFFFFF), Color.Transparent)
+            ))
             .border(
-                1.1.dp,
-                if (isPower) Color(0xFFEC6170)
-                else if (pressed) Color(0xFFAD4557)
-                else Color(0xFF68414C),
+                1.2.dp,
+                Brush.verticalGradient(
+                    if (isPower) listOf(Color(0xFFF999A2), Color(0xFFAE1934))
+                    else listOf(Color(0xFF888392), Color(0xFF43313F), Color(0xFF5A2637))
+                ),
                 shape
             )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
@@ -507,11 +513,15 @@ private fun CompactActionKey(
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    if (pressed) listOf(Color(0xFF1A151C), Color(0xFF46212E))
-                    else listOf(Color(0xFF34303A), Color(0xFF17151C))
+                    if (pressed) listOf(Color(0xFF191720), Color(0xFF3A202B), Color(0xFF151319))
+                    else listOf(Color(0xFF514A56), Color(0xFF2B2731), Color(0xFF131319))
                 )
             )
-            .border(1.dp, if (pressed) Color(0xFFB5394F) else Color(0xFF63404D), shape)
+            .background(Brush.radialGradient(listOf(Color(0x13FFFFFF), Color.Transparent)))
+            .border(1.dp, Brush.verticalGradient(
+                if (pressed) listOf(Color(0xFF6B3A4B), Color(0xFF662334))
+                else listOf(Color(0xFF8A838F), Color(0xFF3A313C), Color(0xFF663141))
+            ), shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -538,9 +548,12 @@ private fun NeonRocker(
                 spotColor = Color(0x24000000))
             .clip(shape)
             .background(Brush.verticalGradient(
-                listOf(Color(0xFF34303A), Color(0xFF17151C))
+                listOf(Color(0xFF514A56), Color(0xFF282530), Color(0xFF131319))
             ))
-            .border(1.dp, Color(0xFF6B3A49), shape),
+            .background(Brush.radialGradient(listOf(Color(0x0FFFFFFF), Color.Transparent)))
+            .border(1.dp, Brush.verticalGradient(listOf(
+                Color(0xFF87808F), Color(0xFF39313B), Color(0xFF623242)
+            )), shape),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -579,7 +592,11 @@ private fun RockerHalf(icon: ImageVector, title: String, onClick: () -> Unit) {
                 scaleY = 1f - .048f * depth
                 translationY = 2.5.dp.toPx() * depth
             }
-            .background(if (pressed) Color(0xFF51202E) else Color.Transparent)
+            .background(if (pressed) Brush.verticalGradient(
+                listOf(Color(0xFF2D1A24), Color(0xFF51202E))
+            ) else Brush.verticalGradient(
+                listOf(Color.Transparent, Color.Transparent)
+            ))
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -595,9 +612,11 @@ private fun MoreRemoteKeys(onCommand: (RemoteCommand) -> Unit, feedback: () -> U
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(Brush.verticalGradient(listOf(
-                Color(0xFF2C2029), Color(0xFF171319)
+                Color(0xFF39303A), Color(0xFF201A22), Color(0xFF141118)
             )))
-            .border(1.dp, Color(0xFF6E3545), RoundedCornerShape(16.dp))
+            .border(1.dp, Brush.verticalGradient(listOf(
+                Color(0xFF7F6C78), Color(0xFF422935), Color(0xFF6B2F40)
+            )), RoundedCornerShape(16.dp))
             .livePress { feedback(); expanded = true }
             .padding(vertical = 16.dp, horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
