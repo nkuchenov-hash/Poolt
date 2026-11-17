@@ -1,6 +1,7 @@
 package app.poolt
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -14,7 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,10 +30,10 @@ import app.poolt.core.RemoteCommand
 import app.poolt.ir.IrCatalogEntry
 import app.poolt.ir.IrProfile
 
-private val red = Color(0xFFE93650)
-private val muted = Color(0xFFABB0BC)
-private val tile = Color(0xFF252630)
-private val popularBrands = listOf("LG", "Samsung", "Sony", "Philips", "Panasonic", "TCL", "Hisense", "Xiaomi")
+private val red = Color(0xFFE6263E)
+private val muted = Color(0xFFB8B6C0)
+private val tile = Color(0xFF24232B)
+private val popularBrands = listOf("LG", "Samsung", "Sony", "Philips", "TCL", "Hisense", "Xiaomi")
 
 private data class TrialCandidate(
     val key: String,
@@ -94,56 +98,287 @@ private fun irCandidates(state: MainUiState, brandInput: String, modelInput: Str
     ) else all
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DevicePickerContent(state: MainUiState, vm: MainViewModel) {
     var wifi by rememberSaveable { mutableStateOf(state.mode == ControlMode.WIFI || !state.irAvailable) }
     var advanced by rememberSaveable { mutableStateOf(false) }
     val height = LocalConfiguration.current.screenHeightDp.dp
     if (advanced) {
-        Column(Modifier.fillMaxWidth().height(height * 0.88f)) {
+        Column(Modifier.fillMaxWidth().height(height * .88f)) {
             TextButton(onClick = { advanced = false }) {
                 Icon(Icons.Default.ArrowBack, null)
                 Spacer(Modifier.width(8.dp))
-                Text("Назад к подключению телевизора")
+                Text("Назад к подключению", fontSize = 15.sp)
             }
             LegacyDevicePickerContent(state, vm)
         }
         return
     }
     Column(
-        Modifier.fillMaxWidth()
-            .heightIn(max = height * 0.88f)
-            .padding(horizontal = 18.dp)
+        Modifier.fillMaxWidth().height(height * .87f)
+            .padding(horizontal = 20.dp)
     ) {
-        Text("Подключить телевизор", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        Text("Выберите удобный способ. Настройка займёт несколько действий.",
-            fontSize = 14.sp, color = muted)
-        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Tv, null, Modifier.size(26.dp), tint = red)
+            Spacer(Modifier.width(10.dp))
+            Text("Добавить телевизор", fontSize = 24.sp,
+                fontWeight = FontWeight.Bold, color = Color.White)
+        }
+        Spacer(Modifier.height(22.dp))
         Row(
-            Modifier.fillMaxWidth().background(tile, RoundedCornerShape(15.dp)).padding(4.dp)
+            Modifier.fillMaxWidth()
+                .background(Color(0xFF29262E), RoundedCornerShape(18.dp))
+                .padding(4.dp)
         ) {
-            listOf(false to "ИК-пульт", true to "По Wi-Fi").forEach { (mode, label) ->
+            listOf(true to "Wi-Fi", false to "ИК-пульт").forEach { (mode, label) ->
                 Box(
                     Modifier.weight(1f)
-                        .background(if (wifi == mode) Color(0xFF913248) else Color.Transparent,
-                            RoundedCornerShape(12.dp))
+                        .background(
+                            if (wifi == mode) Brush.verticalGradient(
+                                listOf(Color(0xFFBA253B), Color(0xFF81182A))
+                            ) else Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Transparent)
+                            ), RoundedCornerShape(15.dp)
+                        )
                         .clickable { wifi = mode; vm.clearIrTrial() }
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = 13.dp),
                     contentAlignment = Alignment.Center
-                ) { Text(label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                ) {
+                    Text(label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
-        Spacer(Modifier.height(14.dp))
-        Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-            if (wifi) EasyWifiPicker(state, vm)
-            else EasyIrPicker(state, vm)
-            Spacer(Modifier.height(10.dp))
-            TextButton(onClick = { advanced = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Другая техника или расширенная настройка", color = muted, fontSize = 13.sp)
+        Spacer(Modifier.height(20.dp))
+        Column(
+            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+        ) {
+            if (wifi) EasyWifiPicker(state, vm) else EasyIrPicker(state, vm)
+            Spacer(Modifier.height(30.dp))
+            TextButton(
+                onClick = { advanced = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Другая техника и расширенные настройки",
+                    color = muted, fontSize = 14.sp)
             }
             Spacer(Modifier.height(22.dp))
         }
+    }
+}
+
+@Composable
+private fun PickerPrimary(
+    title: String,
+    icon: ImageVector,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        Modifier.fillMaxWidth()
+            .heightIn(min = 65.dp)
+            .shadow(
+                elevation = if (enabled) 7.dp else 0.dp,
+                shape = shape,
+                ambientColor = Color(0x1ECA2037),
+                spotColor = Color(0x2CDC304A)
+            )
+            .background(
+                if (enabled) Brush.verticalGradient(
+                    listOf(Color(0xFFF03D55), Color(0xFFC51631), Color(0xFF941127))
+                ) else Brush.verticalGradient(
+                    listOf(Color(0xFF38353C), Color(0xFF27242B))
+                ), shape
+            )
+            .border(1.dp, if (enabled) Color(0xFFEA6B78)
+                else Color(0xFF47414B), shape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 17.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (loading) CircularProgressIndicator(
+            Modifier.size(25.dp), strokeWidth = 2.dp, color = Color.White
+        ) else Icon(icon, null, Modifier.size(26.dp), tint = Color.White)
+        Spacer(Modifier.width(11.dp))
+        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+            color = if (enabled) Color.White else muted)
+    }
+}
+
+@Composable
+private fun EasyWifiPicker(state: MainUiState, vm: MainViewModel) {
+    var manualOpen by rememberSaveable { mutableStateOf(false) }
+    var manualBrand by rememberSaveable { mutableStateOf("LG") }
+
+    LaunchedEffect(Unit) {
+        if (!state.hasScannedWifi && !state.isScanning) vm.scan()
+    }
+
+    Text(
+        "Найдём телевизор в вашей сети",
+        fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Color.White
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(
+        "Включите ТВ и подключите телефон к тому же Wi-Fi.",
+        color = muted, fontSize = 15.sp, lineHeight = 21.sp
+    )
+    Spacer(Modifier.height(20.dp))
+    PickerPrimary(
+        title = if (state.isScanning) "Поиск телевизоров…" else "Найти телевизор",
+        icon = Icons.Default.Wifi,
+        enabled = !state.isScanning && !state.isPairing,
+        loading = state.isScanning
+    ) { vm.scan() }
+    Spacer(Modifier.height(17.dp))
+
+    if (state.savedWifiDevices.isNotEmpty()) {
+        Text("Ваши телевизоры", fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold, color = Color.White)
+        Spacer(Modifier.height(10.dp))
+        state.savedWifiDevices.forEach { device ->
+            EasyDeviceRow(device, state, vm)
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+
+    val newDevices = state.devices.filterNot { found ->
+        state.savedWifiDevices.any {
+            it.address == found.address && it.driverId == found.driverId
+        }
+    }
+    if (newDevices.isNotEmpty()) {
+        Text("Найдено рядом", fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold, color = Color.White)
+        Spacer(Modifier.height(10.dp))
+        newDevices.forEach { device ->
+            EasyDeviceRow(device, state, vm)
+        }
+    }
+
+    if (state.isPairing) {
+        Spacer(Modifier.height(14.dp))
+        LinearProgressIndicator(Modifier.fillMaxWidth(), color = red)
+        Spacer(Modifier.height(10.dp))
+        Text("Подтвердите подключение на экране телевизора.",
+            fontSize = 15.sp, color = Color.White)
+    } else if (!state.isScanning && state.hasScannedWifi &&
+        state.devices.isEmpty() && state.savedWifiDevices.isEmpty()) {
+        Spacer(Modifier.height(5.dp))
+        Row(
+            Modifier.fillMaxWidth()
+                .background(tile, RoundedCornerShape(16.dp))
+                .padding(15.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.InfoOutline, null, tint = muted)
+            Spacer(Modifier.width(12.dp))
+            Text("Телевизор пока не найден.",
+                fontSize = 15.sp, color = muted)
+        }
+    }
+
+    if (!state.isPairing && state.wifiScanMessage.startsWith("Не удалось подключиться")) {
+        Spacer(Modifier.height(9.dp))
+        Text("ТВ не ответил. Проверьте его запрос на подключение.",
+            fontSize = 15.sp, color = Color(0xFFFFB8A7))
+    }
+
+    Spacer(Modifier.height(24.dp))
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { manualOpen = !manualOpen }
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.HelpOutline, null, tint = red)
+        Spacer(Modifier.width(10.dp))
+        Text("Телевизор не находится?",
+            fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f))
+        Icon(
+            if (manualOpen) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            null, tint = muted
+        )
+    }
+    if (manualOpen) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Проверьте Wi-Fi и разрешите управление с телефона в настройках ТВ.",
+            fontSize = 15.sp, lineHeight = 21.sp, color = muted
+        )
+        Spacer(Modifier.height(15.dp))
+        OutlinedTextField(
+            value = state.manualIp,
+            onValueChange = vm::setManualIp,
+            label = { Text("IP-адрес телевизора") },
+            placeholder = { Text("192.168.1.100") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            listOf("LG", "Samsung", "Roku").forEach { name ->
+                FilterChip(
+                    selected = manualBrand == name,
+                    onClick = { manualBrand = name },
+                    label = { Text(name, fontSize = 15.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFF913348)
+                    )
+                )
+            }
+        }
+        Spacer(Modifier.height(7.dp))
+        PickerPrimary(
+            title = "Подключить по IP",
+            icon = Icons.Default.Link,
+            enabled = state.manualIp.count { it == '.' } == 3 && !state.isPairing
+        ) { state.presets.firstOrNull { it.brand == manualBrand }?.let(vm::addManual) }
+    }
+}
+
+@Composable
+private fun EasyDeviceRow(device: Device, state: MainUiState, vm: MainViewModel) {
+    val selected = state.selected?.address == device.address &&
+        state.selected?.driverId == device.driverId
+    Row(
+        Modifier.fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .background(
+                Brush.verticalGradient(listOf(Color(0xFF33303A), Color(0xFF1D1B22))),
+                RoundedCornerShape(17.dp)
+            )
+            .border(
+                1.dp, if (selected) Color(0xFF96455A)
+                else Color(0xFF55505D), RoundedCornerShape(17.dp)
+            )
+            .clickable(enabled = !state.isPairing) { vm.selectDevice(device) }
+            .padding(horizontal = 15.dp, vertical = 15.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Tv, null, Modifier.size(26.dp), tint = Color.White)
+        Spacer(Modifier.width(13.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                device.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (selected && state.selected?.isOnline == true) "Подключено"
+                else if (selected && state.isPairing) "Подключаем…"
+                else "Нажмите для подключения",
+                fontSize = 13.sp, color = muted
+            )
+        }
+        Icon(Icons.Default.ChevronRight, null, tint = muted)
     }
 }
 
@@ -152,297 +387,184 @@ private fun EasyIrPicker(state: MainUiState, vm: MainViewModel) {
     var brand by rememberSaveable { mutableStateOf("") }
     var model by rememberSaveable { mutableStateOf("") }
     var current by rememberSaveable { mutableIntStateOf(0) }
-    var confirmedPower by rememberSaveable { mutableStateOf(false) }
     var started by rememberSaveable { mutableStateOf(false) }
-    val all = remember(state.irCatalog, state.irProfiles, brand, model) {
+    var confirmed by rememberSaveable { mutableStateOf(false) }
+
+    val options = remember(state.irCatalog, state.irProfiles, brand, model) {
         irCandidates(state, brand, model)
     }
-    val candidate = all.getOrNull(current)
-    val exactBrand = canonicalBrand(brand)
-    val isReady = state.irAvailable
-    val hasLoaded = candidate != null &&
-        state.irTrialProfile?.id == (candidate.profile?.id ?: "irdb:" + candidate.entry?.path)
+    val candidate = options.getOrNull(current)
+    val matched = candidate != null && state.irTrialProfile?.id ==
+        (candidate.profile?.id ?: "irdb:" + candidate.entry?.path)
 
-    fun resetAttempt() {
+    fun runTest(option: TrialCandidate?) {
+        if (option == null) return
+        started = true
+        confirmed = false
+        if (option.profile != null) {
+            vm.testIrProfile(option.profile)
+            vm.sendIrTestCommand(RemoteCommand.POWER)
+        } else if (option.entry != null) {
+            vm.testIrEntry(option.entry, sendPowerAfterLoad = true)
+        }
+    }
+    fun next() {
+        if (options.isEmpty()) return
+        current = (current + 1) % options.size
+        vm.clearIrTrial()
+        runTest(options.getOrNull(current))
+    }
+    fun reset() {
         started = false
-        confirmedPower = false
+        confirmed = false
+        current = 0
         vm.clearIrTrial()
     }
 
-    if (!isReady) {
-        Text("В этом телефоне Android не обнаружил ИК-передатчик. " +
-            "ИК-сигналы отправить нельзя; используйте Wi-Fi.",
-            color = Color(0xFFFFB88C), fontSize = 15.sp)
-        Spacer(Modifier.height(12.dp))
-    }
-
-    OutlinedTextField(
-        value = brand,
-        onValueChange = { brand = it; current = 0; resetAttempt() },
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text("Производитель") },
-        placeholder = { Text("Например, LG или Samsung") },
-        leadingIcon = { Icon(Icons.Default.Tv, null) },
-        singleLine = true
-    )
-    Spacer(Modifier.height(8.dp))
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        popularBrands.forEach { name ->
-            SuggestionChip(
-                onClick = { brand = name; current = 0; resetAttempt() },
-                label = { Text(name, fontSize = 13.sp) },
-                colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = if (exactBrand.equals(name, true)) Color(0xFF642C3C)
-                    else Color(0xFF252630)
-                )
-            )
-        }
-    }
-    Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
-        value = model,
-        onValueChange = { model = it; current = 0; resetAttempt() },
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text("Модель телевизора (необязательно)") },
-        placeholder = { Text("Например, OLED55C3 или UE55AU7100") },
-        leadingIcon = { Icon(Icons.Default.Search, null) },
-        singleLine = true,
-        supportingText = { Text("Модель помогает найти подходящий код. Если точного совпадения нет, попробуем коды марки.") }
-    )
-    Spacer(Modifier.height(8.dp))
-    if (exactBrand.isBlank()) {
-        Text("Начните с выбора марки телевизора.", color = muted, fontSize = 15.sp)
+    if (!state.irAvailable) {
+        Text("На этом телефоне ИК-передатчик недоступен. Используйте Wi-Fi.",
+            fontSize = 16.sp, color = Color(0xFFFFC0AD))
         return
     }
-    if (all.isEmpty()) {
-        Text(
-            if (state.isLoadingIrCatalog) "Загружаем варианты пультов…"
-            else "Для этой марки пока нет доступных ИК-кодов. Проверьте название марки или обновите каталог.",
-            color = muted, fontSize = 15.sp
+
+    if (!started) {
+        Text("Найдём подходящий пульт", fontSize = 19.sp,
+            fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(18.dp))
+        OutlinedTextField(
+            value = brand,
+            onValueChange = { brand = it; reset() },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Марка телевизора") },
+            placeholder = { Text("Например, LG") },
+            singleLine = true
         )
         Spacer(Modifier.height(10.dp))
-        OutlinedButton(onClick = vm::loadWorldwideIrCatalog) { Text("Обновить каталог") }
-        return
-    }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Вариант ${current + 1} из ${all.size}",
-            fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.weight(1f))
-        Text(candidate?.label ?: "", fontSize = 12.sp, color = muted,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp))
-    }
-    Spacer(Modifier.height(9.dp))
-    Text(
-        "1. Наведите телефон на выключенный телевизор. Нажмите кнопку питания.",
-        fontSize = 15.sp, color = muted
-    )
-    Spacer(Modifier.height(14.dp))
-    Button(
-        onClick = {
-            if (candidate != null) {
-                started = true
-                confirmedPower = false
-                when {
-                    candidate.profile != null -> {
-                        vm.testIrProfile(candidate.profile)
-                        vm.sendIrTestCommand(RemoteCommand.POWER)
-                    }
-                    candidate.entry != null -> vm.testIrEntry(candidate.entry, sendPowerAfterLoad = true)
-                }
-            }
-        },
-        enabled = isReady && !state.isTestingIr && candidate != null,
-        modifier = Modifier.fillMaxWidth().height(64.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = red)
-    ) {
-        Icon(Icons.Default.PowerSettingsNew, null, Modifier.size(27.dp))
-        Spacer(Modifier.width(12.dp))
-        Text(if (started) "Повторить Power" else "Проверить питание",
-            fontSize = 18.sp, fontWeight = FontWeight.Bold)
-    }
-    if (state.isTestingIr) {
-        Spacer(Modifier.height(8.dp))
-        LinearProgressIndicator(Modifier.fillMaxWidth())
-    }
-    if (state.irTestMessage.isNotBlank()) {
-        Spacer(Modifier.height(8.dp))
-        Text(state.irTestMessage, color = muted, fontSize = 13.sp)
-    }
-    if (started && hasLoaded && !state.isTestingIr && state.irPowerTestSent) {
-        Spacer(Modifier.height(14.dp))
-        Text("2. Телевизор включился или отреагировал?", fontSize = 16.sp)
-        Spacer(Modifier.height(9.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = { confirmedPower = true },
-                modifier = Modifier.weight(1f).height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF285B49))
-            ) { Text("Да, работает", fontSize = 15.sp) }
-            OutlinedButton(
-                onClick = {
-                    current = if (current < all.lastIndex) current + 1 else 0
-                    resetAttempt()
-                },
-                modifier = Modifier.weight(1f).height(52.dp)
-            ) { Text("Нет, следующий", fontSize = 14.sp) }
-        }
-        if (confirmedPower) {
-            Spacer(Modifier.height(12.dp))
-            Text("Питание подтверждено. Можно проверить другие кнопки или сохранить пульт.",
-                color = muted, fontSize = 14.sp)
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    RemoteCommand.OK to "OK",
-                    RemoteCommand.VOLUME_UP to "VOL+",
-                    RemoteCommand.BACK to "Назад"
-                ).forEach { (cmd, title) ->
-                    OutlinedButton(
-                        onClick = { vm.sendIrTestCommand(cmd) },
-                        enabled = state.irTrialProfile?.commands?.containsKey(cmd) == true,
-                        modifier = Modifier.weight(1f)
-                    ) { Text(title, fontSize = 12.sp) }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = vm::confirmIrTrial,
-                modifier = Modifier.fillMaxWidth().height(55.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = red)
-            ) {
-                Icon(Icons.Default.Check, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Сохранить этот пульт", fontSize = 16.sp)
-            }
-        }
-    } else if (started && !state.isTestingIr && !hasLoaded && state.irTestMessage.contains("не", true)) {
-        Spacer(Modifier.height(10.dp))
-        OutlinedButton(
-            onClick = {
-                current = if (current < all.lastIndex) current + 1 else 0
-                resetAttempt()
-            }, modifier = Modifier.fillMaxWidth()
-        ) { Text("Следующий код") }
-    }
-    Spacer(Modifier.height(11.dp))
-    TextButton(
-        onClick = {
-            current = if (current < all.lastIndex) current + 1 else 0
-            resetAttempt()
-        }, modifier = Modifier.fillMaxWidth()
-    ) { Text("Пропустить код и попробовать следующий", color = muted) }
-}
-
-@Composable
-private fun EasyWifiPicker(state: MainUiState, vm: MainViewModel) {
-    var manualBrand by rememberSaveable { mutableStateOf("LG") }
-    LaunchedEffect(Unit) {
-        if (!state.hasScannedWifi && !state.isScanning) vm.scan()
-    }
-    Text("Телефон и включённый телевизор должны быть в одной сети Wi-Fi.",
-        color = muted, fontSize = 15.sp)
-    Spacer(Modifier.height(10.dp))
-    Button(
-        onClick = vm::scan, enabled = !state.isScanning,
-        modifier = Modifier.fillMaxWidth().height(55.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = red)
-    ) {
-        if (state.isScanning) {
-            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Color.White)
-        } else Icon(Icons.Default.Wifi, null)
-        Spacer(Modifier.width(9.dp))
-        Text(if (state.isScanning) "Ищем телевизоры…" else "Найти телевизор", fontSize = 16.sp)
-    }
-    Spacer(Modifier.height(10.dp))
-    if (state.wifiScanMessage.isNotBlank()) {
-        Text(state.wifiScanMessage, color = muted, fontSize = 14.sp)
-        Spacer(Modifier.height(9.dp))
-    }
-    if (state.isPairing) {
-        LinearProgressIndicator(Modifier.fillMaxWidth())
-        Text("Подтвердите разрешение на телевизоре, если появится запрос.",
-            color = Color(0xFFFFC3AB), fontSize = 14.sp)
-        Spacer(Modifier.height(10.dp))
-    }
-    if (state.savedWifiDevices.isNotEmpty()) {
-        Text("Сохранённые", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-        Spacer(Modifier.height(7.dp))
-        state.savedWifiDevices.forEach { device ->
-            EasyDeviceRow(device, state, vm)
-        }
-    }
-    if (state.devices.isNotEmpty()) {
-        Spacer(Modifier.height(6.dp))
-        Text("Найденные в сети", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-        Spacer(Modifier.height(7.dp))
-        state.devices.filterNot { found ->
-            state.savedWifiDevices.any { saved ->
-                saved.driverId == found.driverId && saved.address == found.address
-            }
-        }.forEach { device ->
-            EasyDeviceRow(device, state, vm)
-        }
-    }
-    Spacer(Modifier.height(17.dp))
-    Text("Не нашли телевизор? Подключить по IP", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-    Spacer(Modifier.height(6.dp))
-    Text("IP телевизора обычно указан в его настройках сети. " +
-        "Это работает и когда роутер блокирует автоматическое обнаружение.",
-        color = muted, fontSize = 13.sp)
-    Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
-        value = state.manualIp, onValueChange = vm::setManualIp,
-        modifier = Modifier.fillMaxWidth(), label = { Text("IP телевизора") },
-        placeholder = { Text("192.168.1.100") }, singleLine = true
-    )
-    Spacer(Modifier.height(9.dp))
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("LG", "Samsung", "Roku").forEach { brand ->
-            FilterChip(
-                selected = manualBrand == brand,
-                onClick = { manualBrand = brand },
-                label = { Text(brand) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFF813246)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            popularBrands.forEach { name ->
+                FilterChip(
+                    selected = canonicalBrand(brand).equals(name, true),
+                    onClick = { brand = name; reset() },
+                    label = { Text(name, fontSize = 15.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFF843044)
+                    )
                 )
-            )
+            }
         }
-    }
-    Button(
-        onClick = {
-            state.presets.firstOrNull { it.brand == manualBrand }?.let(vm::addManual)
-        },
-        enabled = state.manualIp.count { it == '.' } == 3 && !state.isPairing,
-        modifier = Modifier.fillMaxWidth().height(52.dp)
-    ) {
-        Text("Подключить ${manualBrand} по IP")
-    }
-    Spacer(Modifier.height(8.dp))
-    Text("Если устройство не находится: выключите VPN, убедитесь, что это не гостевой Wi-Fi, " +
-        "а на телевизоре разрешено управление со смартфона.",
-        color = muted, fontSize = 12.sp)
-}
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = model,
+            onValueChange = { model = it; reset() },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Модель (необязательно)") },
+            placeholder = { Text("OLED55C3, UE55AU7100…") },
+            singleLine = true
+        )
+        Spacer(Modifier.height(22.dp))
+        if (brand.isNotBlank() && options.isEmpty()) {
+            Text("Кодов для этой марки пока нет.",
+                fontSize = 15.sp, color = muted)
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = vm::loadWorldwideIrCatalog) {
+                Text("Обновить каталог", fontSize = 15.sp)
+            }
+        } else PickerPrimary(
+            title = "Проверить пульт",
+            icon = Icons.Default.PowerSettingsNew,
+            enabled = candidate != null
+        ) { runTest(candidate) }
+        if (brand.isBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Text("Сначала выберите марку.", fontSize = 15.sp, color = muted)
+        }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    canonicalBrand(brand) + if (model.isNotBlank()) " · $model" else "",
+                    fontWeight = FontWeight.SemiBold, fontSize = 20.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(5.dp))
+                Text("Вариант ${current + 1} из ${options.size}", fontSize = 15.sp, color = muted)
+            }
+            TextButton(onClick = { reset() }) { Text("Изменить", color = muted) }
+        }
+        Spacer(Modifier.height(22.dp))
+        Text(
+            if (confirmed) "Телевизор реагирует!"
+            else "Включился телевизор?",
+            fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Color.White
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            if (confirmed) "Сохраните этот пульт или проверьте другие кнопки."
+            else "Наведите телефон на ТВ и проверьте питание.",
+            fontSize = 16.sp, color = muted, lineHeight = 22.sp
+        )
+        Spacer(Modifier.height(19.dp))
+        PickerPrimary(
+            title = if (state.isTestingIr) "Подготавливаем сигнал…" else "Повторить Power",
+            icon = Icons.Default.PowerSettingsNew,
+            enabled = !state.isTestingIr && candidate != null,
+            loading = state.isTestingIr
+        ) { runTest(candidate) }
 
-@Composable
-private fun EasyDeviceRow(device: Device, state: MainUiState, vm: MainViewModel) {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 9.dp)
-            .background(tile, RoundedCornerShape(15.dp))
-            .clickable(enabled = !state.isPairing) { vm.selectDevice(device) }
-            .padding(horizontal = 14.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Default.Tv, null, tint = Color.White, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(device.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Text("${device.brand ?: "TV"} · ${device.address ?: ""} · Подключить",
-                fontSize = 12.sp, color = muted)
+        val error = state.irTestMessage
+        if (!state.isTestingIr && error.isNotBlank() &&
+            !error.startsWith("Команда отправлена") &&
+            !error.startsWith("Наведите телефон")) {
+            Spacer(Modifier.height(13.dp))
+            Text(error, fontSize = 15.sp, color = Color(0xFFFFB9B6))
         }
-        Icon(Icons.Default.ChevronRight, null, tint = muted)
+
+        if (matched && state.irPowerTestSent && !state.isTestingIr) {
+            Spacer(Modifier.height(19.dp))
+            if (!confirmed) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = { confirmed = true },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25664C))
+                    ) { Text("Да, работает", fontSize = 15.sp) }
+                    OutlinedButton(
+                        onClick = { next() },
+                        modifier = Modifier.weight(1f).height(56.dp)
+                    ) { Text("Нет, дальше", fontSize = 15.sp) }
+                }
+            } else {
+                PickerPrimary(
+                    title = "Сохранить пульт",
+                    icon = Icons.Default.Check
+                ) { vm.confirmIrTrial() }
+                Spacer(Modifier.height(15.dp))
+                Text("Проверить другие кнопки", fontSize = 16.sp, color = muted)
+                Spacer(Modifier.height(9.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        RemoteCommand.OK to "OK",
+                        RemoteCommand.VOLUME_UP to "VOL+",
+                        RemoteCommand.BACK to "Назад"
+                    ).forEach { (cmd, label) ->
+                        OutlinedButton(
+                            onClick = { vm.sendIrTestCommand(cmd) },
+                            enabled = state.irTrialProfile?.commands?.containsKey(cmd) == true,
+                            modifier = Modifier.weight(1f)
+                        ) { Text(label, fontSize = 14.sp) }
+                    }
+                }
+            }
+        }
+        if (!confirmed) {
+            Spacer(Modifier.height(15.dp))
+            TextButton(onClick = { next() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Попробовать следующий вариант", fontSize = 15.sp, color = muted)
+            }
+        }
     }
 }
