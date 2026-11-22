@@ -1,0 +1,93 @@
+name: Pooltophone 0.26.0 reinstall APK (temporary key)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pooltophone-reinstall-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Generate private one-off release key (never upload key)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PASS="$(openssl rand -hex 24)"
+          echo "::add-mask::$PASS"
+          KEYSTORE="$RUNNER_TEMP/pooltophone-reinstall.p12"
+          keytool -genkeypair -noprompt -alias pooltrescue -keyalg RSA -keysize 3072 -sigalg SHA256withRSA -validity 3650 \
+            -dname "CN=Pooltophone Reinstall APK, O=Pooltophone" -storetype PKCS12 \
+            -keystore "$KEYSTORE" -storepass "$PASS" -keypass "$PASS"
+          echo "POOLTOPHONE_SIGNING_KEYSTORE=$KEYSTORE" >> "$GITHUB_ENV"
+          echo "POOLTOPHONE_SIGNING_STORE_PASSWORD=$PASS" >> "$GITHUB_ENV"
+          echo "POOLTOPHONE_SIGNING_KEY_PASSWORD=$PASS" >> "$GITHUB_ENV"
+          echo "POOLTOPHONE_SIGNING_KEY_ALIAS=pooltrescue" >> "$GITHUB_ENV"
+
+      - name: Build installable release APK
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Verify APK signature and package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -E "^package: name='app.poolt'.*versionName='0.26.0'"
+          cp "$APK" Pooltophone-0.26.0-REINSTALL.apk
+          sha256sum Pooltophone-0.26.0-REINSTALL.apk
+
+      - name: Upload APK to GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pooltophone-0.26.0-REINSTALL
+          path: Pooltophone-0.26.0-REINSTALL.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish downloadable APK (non-upgrade build)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.txt <<'EOF'
+          Pooltophone / Пультофон 0.26.0, recovery APK.
+
+          IMPORTANT: This APK was built with a DIFFERENT signing certificate because the permanent private signing key was unavailable to CI.
+
+          - It CANNOT be installed over an existing Pooltophone installation signed with the former certificate.
+          - To install this APK, back up settings if possible, uninstall the prior app, then install this one. Uninstalling can erase settings and pairings.
+          - Future in-place upgrades need the same original/new private signing key. The temporary recovery key is not retained; this APK is not an ongoing upgrade channel.
+          - Application package: app.poolt. Source: the current main branch at the tag's commit.
+          EOF
+          TAG="pooltophone-0.26.0-reinstall-20261122"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Pooltophone-0.26.0-REINSTALL.apk --clobber
+          else
+            gh release create "$TAG" Pooltophone-0.26.0-REINSTALL.apk \
+              --title "Pooltophone 0.26.0 — reinstall APK (different signing key)" \
+              --notes-file release-notes.txt
+          fi
+
+      - name: Delete temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pooltophone-reinstall.p12"
